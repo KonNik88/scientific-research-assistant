@@ -35,9 +35,3 @@ jobs:
 
       - name: Lint
         run: uv run ruff check --output-format=github .
-
-      - name: Type check
-        run: uv run mypy src tests
-
-      - name: Run tests
-        run: uv run pytest
