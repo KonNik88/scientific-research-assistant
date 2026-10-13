@@ -41,3 +41,6 @@ dist/
 Thumbs.db
 
 ideas/
+
+# Downloaded research artifacts
+research/data/
