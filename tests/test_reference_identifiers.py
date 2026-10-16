@@ -131,6 +131,7 @@ def test_report_keeps_provenance_and_citation_state(tmp_path: Path) -> None:
     assert report["records"][0]["cited"] is True
     assert report["records"][1]["cited"] is False
     assert report["records"][0]["start_line"] == 10
+    assert report["cited_keys_missing_from_bibliography"] == []
 
 
 def test_reject_cross_document_mix(tmp_path: Path) -> None:
@@ -142,10 +143,20 @@ def test_reject_cross_document_mix(tmp_path: Path) -> None:
         build_identifier_report(bibliography, citations)
 
 
-def test_reject_missing_bibliography_key(tmp_path: Path) -> None:
-    bibliography, citations = _write_reports(tmp_path, cited=["z"])
-    with pytest.raises(ValueError, match="missing from bibliography"):
-        build_identifier_report(bibliography, citations)
+def test_report_preserves_missing_bibliography_keys(tmp_path: Path) -> None:
+    bibliography, citations = _write_reports(
+        tmp_path, cited=["a", "box2005statistics", "bishop2006pattern"]
+    )
+    report = build_identifier_report(bibliography, citations)
+
+    assert report["reference_count"] == 2
+    assert report["candidate_count"] == 1
+    assert report["records"][0]["cited"] is True
+    assert report["records"][1]["cited"] is False
+    assert report["cited_keys_missing_from_bibliography"] == [
+        "bishop2006pattern",
+        "box2005statistics",
+    ]
 
 
 def test_report_does_not_extract_identifier_from_tex_comment(tmp_path: Path) -> None:

@@ -37,6 +37,7 @@ class IdentifierReport(TypedDict):
     candidate_count: int
     ambiguous_count: int
     without_explicit_id_count: int
+    cited_keys_missing_from_bibliography: list[str]
     records: list[dict[str, object]]
 
 
@@ -120,9 +121,6 @@ def build_identifier_report(
                 status=found.status,
             )
         )
-    if not cited.issubset(seen):
-        raise ValueError("Citation keys missing from bibliography")
-
     return {
         "arxiv_id": paper_id,
         "source_sha256": source_hash,
@@ -131,6 +129,7 @@ def build_identifier_report(
         "candidate_count": sum(r.status == "candidate" for r in records),
         "ambiguous_count": sum(r.status == "ambiguous" for r in records),
         "without_explicit_id_count": sum(r.status == "no_explicit_id" for r in records),
+        "cited_keys_missing_from_bibliography": sorted(cited - seen),
         "records": [asdict(record) for record in records],
     }
 
@@ -154,6 +153,10 @@ def main() -> None:
     print(f"Identifier candidates: {report['candidate_count']}")
     print(f"Ambiguous records: {report['ambiguous_count']}")
     print(f"Without explicit IDs: {report['without_explicit_id_count']}")
+    print(
+        "Citation keys missing from bibliography: "
+        f"{report['cited_keys_missing_from_bibliography']}"
+    )
     print(f"Report: {path}")
     print("First five references:")
     for record in report["records"][:5]:

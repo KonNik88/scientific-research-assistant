@@ -22,7 +22,7 @@ MAX_TEX_BYTES = 4 * 1024 * 1024
 _BEGIN = re.compile(r"\\begin\s*\{thebibliography\}\s*\{[^}\n]*\}")
 _END = re.compile(r"\\end\s*\{thebibliography\}")
 _BIBITEM = re.compile(
-    r"^[ \t]*\\bibitem\s*(?:\[[^\]\n]*\]\s*)?\{(?P<key>[^}\n]+)\}",
+    r"^[ \t]*\\bibitem\s*(?:\[[^\]]*\]\s*)?\{(?P<key>[^}\n]+)\}",
     re.MULTILINE,
 )
 _ANY_BIBITEM = re.compile(r"\\bibitem\b")
@@ -120,9 +120,9 @@ def extract_bibliography(text: str, *, source_file: str) -> list[BibItem]:
 
 
 def read_tex_from_tar(source_path: Path, member_name: str) -> tuple[str, str]:
-    """Read a bounded regular .tex file from an archive, without unpacking it."""
-    if not member_name.endswith(".tex"):
-        raise ValueError("Source member must be a .tex file")
+    """Read a bounded regular .tex or .bbl file without unpacking the archive."""
+    if not member_name.endswith((".tex", ".bbl")):
+        raise ValueError("Source member must be a .tex or .bbl file")
     with tarfile.open(source_path, mode="r:*") as archive:
         members = [member for member in archive if member.name == member_name]
         if len(members) != 1 or not members[0].isfile():
@@ -146,7 +146,7 @@ def read_tex_from_tar(source_path: Path, member_name: str) -> tuple[str, str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("arxiv_id", help="Example: 1706.03762v7")
-    parser.add_argument("--tex-file", default="ms.tex", help="TeX TAR member")
+    parser.add_argument("--tex-file", default="ms.tex", help="TeX or BBL TAR member")
     args = parser.parse_args()
     arxiv_id = validate_arxiv_id(args.arxiv_id)
     source_file: str = args.tex_file
