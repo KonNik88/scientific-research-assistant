@@ -4,8 +4,6 @@ Research spike: only thebibliography/bibitem, not .bib files or citation resolut
 No extraction to disk and no LaTeX execution.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import re
@@ -13,9 +11,12 @@ import tarfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from research.spikes.inspect_arxiv_source import sha256_file, validate_arxiv_id
+from research.spikes.inspect_arxiv_source import (
+    PROJECT_ROOT,
+    sha256_file,
+    validate_arxiv_id,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAX_TEX_BYTES = 4 * 1024 * 1024
 
 _BEGIN = re.compile(r"\\begin\s*\{thebibliography\}\s*\{[^}\n]*\}")
@@ -135,7 +136,7 @@ def read_tex_from_tar(source_path: Path, member_name: str) -> tuple[str, str]:
         with stream:
             data = stream.read(MAX_TEX_BYTES + 1)
         if len(data) > MAX_TEX_BYTES:
-            raise ValueError("TeX member exceeds size limit when decoded")
+            raise ValueError("TeX member exceeds size limit when read")
     try:
         return data.decode("utf-8"), "utf-8"
     except UnicodeDecodeError:
@@ -168,7 +169,7 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"Source:  {source_file} ({encoding})")
-    print(f"Entries: {len(entries)}; unique keys: {len({e.key for e in entries})}")
+    print(f"Entries: {len(entries)}")
     print(f"Report:  {report_path}")
     for entry in entries[:5]:
         print(f"  {entry.key} (line {entry.start_line})")

@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TypedDict, cast
 
+from research.spikes.extract_tex_bibliography import mask_tex_comments
 from research.spikes.inspect_arxiv_source import PROJECT_ROOT, validate_arxiv_id
 from research.spikes.reference_identifiers import extract_identifiers
 
@@ -105,7 +106,7 @@ def build_identifier_report(
         ):
             raise ValueError(f"Invalid or duplicate bibliography entry: {key!r}")
         seen.add(key)
-        found = extract_identifiers(raw_tex)
+        found = extract_identifiers(mask_tex_comments(raw_tex))
         records.append(
             ReferenceIdentifiers(
                 key=key,
@@ -154,7 +155,7 @@ def main() -> None:
     print(f"Ambiguous records: {report['ambiguous_count']}")
     print(f"Without explicit IDs: {report['without_explicit_id_count']}")
     print(f"Report: {path}")
-    print("First five candidates:")
+    print("First five references:")
     for record in report["records"][:5]:
         print(
             f"  {record['key']}: arXiv={record['arxiv_ids']} "

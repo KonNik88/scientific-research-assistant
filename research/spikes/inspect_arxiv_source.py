@@ -1,21 +1,17 @@
 """Download and inspect one arXiv source package without extracting it."""
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import hashlib
 import json
 import re
 import tarfile
-import urllib.error
 import urllib.request
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import cast
 
-ARXIV_ID_PATTERN = re.compile(r"\d{4}\.\d{4,5}(?:v[1-9]\d*)?\Z")
+ARXIV_ID_PATTERN = re.compile(r"\d{4}\.\d{4,5}(?:v[1-9]\d*)?")
 MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 10_000
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -28,35 +24,62 @@ def validate_arxiv_id(value: str) -> str:
     return value
 
 
-def download_source(arxiv_id: str, destination: Path) -> str:
-    """Fetch an arXiv source with a download-size bound; return final URL."""
+def cached_source_is_valid(source_path: Path, report_path: Path, arxiv_id: str) -> bool:
+    """Check whether the cached source matches its inspection report."""
+    if not source_path.is_file() or not report_path.is_file():
+        return False
+
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        size = source_path.stat().st_size
+
+        return (
+            isinstance(report, dict)
+            and report.get("arxiv_id") == arxiv_id
+            and 0 < size <= MAX_DOWNLOAD_BYTES
+            and report.get("archive_size_bytes") == size
+            and report.get("sha256") == sha256_file(source_path)
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def download_source(arxiv_id: str, destination: Path) -> None:
+    """Download an arXiv source archive with a 50 MiB size limit."""
     url = f"https://arxiv.org/src/{arxiv_id}"
-    if destination.exists():
-        return url  # Reuse locally cached download.
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_name(destination.name + ".part")
+
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "ScientificResearchAssistant/0.1 (academic research)"},
     )
+
     try:
         with urllib.request.urlopen(request, timeout=40) as response:
-            final_url = cast(str, response.geturl())
             downloaded = 0
             first_bytes = b""
+
             with partial.open("wb") as stream:
                 while chunk := response.read(1024 * 1024):
                     if not first_bytes:
                         first_bytes = chunk[:128].lstrip().lower()
+
                     downloaded += len(chunk)
                     if downloaded > MAX_DOWNLOAD_BYTES:
                         raise ValueError("Source archive exceeds 50 MiB limit")
+
                     stream.write(chunk)
+
+        if downloaded == 0:
+            raise ValueError("Downloaded source is empty")
+
         if first_bytes.startswith((b"<!doctype html", b"<html")):
             raise ValueError("Received HTML instead of a source archive")
+
         partial.replace(destination)
-        return final_url
+
     finally:
         partial.unlink(missing_ok=True)
 
@@ -130,9 +153,14 @@ def main() -> None:
     arxiv_id = validate_arxiv_id(args.arxiv_id)
     output = PROJECT_ROOT / "research" / "data" / "arxiv" / arxiv_id
     source_path = output / "source.bin"
+    report_path = output / "inspection.json"
+    source_url = f"https://arxiv.org/src/{arxiv_id}"
 
     print(f"Inspecting arXiv:{arxiv_id}")
-    source_url = download_source(arxiv_id, source_path)
+
+    if not cached_source_is_valid(source_path, report_path, arxiv_id):
+        download_source(arxiv_id, source_path)
+
     report = {
         "arxiv_id": arxiv_id,
         "source_url": source_url,
@@ -141,7 +169,7 @@ def main() -> None:
         "sha256": sha256_file(source_path),
         **inspect_source(source_path),
     }
-    report_path = output / "inspection.json"
+
     report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
