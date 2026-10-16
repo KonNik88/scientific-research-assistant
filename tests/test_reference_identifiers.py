@@ -146,3 +146,14 @@ def test_reject_missing_bibliography_key(tmp_path: Path) -> None:
     bibliography, citations = _write_reports(tmp_path, cited=["z"])
     with pytest.raises(ValueError, match="missing from bibliography"):
         build_identifier_report(bibliography, citations)
+
+
+def test_report_does_not_extract_identifier_from_tex_comment(tmp_path: Path) -> None:
+    bibliography, citations = _write_reports(tmp_path)
+    payload = json.loads(bibliography.read_text(encoding="utf-8"))
+    payload["entries"][0]["raw_tex"] = "No real ID. % arXiv:1607.06450"
+    bibliography.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = build_identifier_report(bibliography, citations)
+    assert report["candidate_count"] == 0
+    assert report["without_explicit_id_count"] == 2
