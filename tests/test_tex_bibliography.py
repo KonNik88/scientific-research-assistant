@@ -117,3 +117,45 @@ def test_tar_non_regular_member_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Expected one regular"):
         read_tex_from_tar(source, "ms.tex")
+
+
+def test_multiline_bibitem_labels_from_bbl() -> None:
+    text = (
+        "\\begin{thebibliography}{32}\n"
+        "\\bibitem[Krizhevsky et~al.(2012)Krizhevsky, Sutskever, and\n"
+        "  Hinton]{krizhevsky2012imagenet}\n"
+        "Alex Krizhevsky et al.\n"
+        "\\newblock Imagenet classification.\n"
+        "\\bibitem[Bastien {\\em et~al.}(2012)Bastien, Lamblin, Pascanu,\n"
+        "  Goodfellow, and Bengio]{Bastien-Theano-2012}\n"
+        "Bastien et al.\n"
+        "\\newblock Theano.\n"
+        "\\end{thebibliography}\n"
+    )
+    entries = extract_bibliography(text, source_file="references.bbl")
+    assert [entry.key for entry in entries] == [
+        "krizhevsky2012imagenet",
+        "Bastien-Theano-2012",
+    ]
+    assert [(entry.start_line, entry.end_line) for entry in entries] == [
+        (2, 5),
+        (6, 9),
+    ]
+    assert "Imagenet classification" in entries[0].raw_tex
+    assert "Theano" in entries[1].raw_tex
+
+
+def test_read_bbl_member_from_tar(tmp_path: Path) -> None:
+    source = tmp_path / "source.bin"
+    contents = (
+        b"\\begin{thebibliography}{1}\n\\bibitem{x} Paper\n\\end{thebibliography}\n"
+    )
+    with tarfile.open(source, "w:gz") as archive:
+        info = tarfile.TarInfo("references.bbl")
+        info.size = len(contents)
+        archive.addfile(info, io.BytesIO(contents))
+
+    loaded, encoding = read_tex_from_tar(source, "references.bbl")
+    assert loaded == contents.decode("utf-8")
+    assert encoding == "utf-8"
+    assert not (tmp_path / "references.bbl").exists()
