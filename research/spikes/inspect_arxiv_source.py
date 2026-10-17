@@ -146,6 +146,24 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def save_inspection_report(arxiv_id: str, source_path: Path) -> dict[str, object]:
+    """Inspect a downloaded source and save its report beside the archive."""
+    report = {
+        "arxiv_id": arxiv_id,
+        "source_url": f"https://arxiv.org/src/{arxiv_id}",
+        "inspected_at_utc": datetime.now(UTC).isoformat(),
+        "archive_size_bytes": source_path.stat().st_size,
+        "sha256": sha256_file(source_path),
+        **inspect_source(source_path),
+    }
+    report_path = source_path.with_name("inspection.json")
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("arxiv_id", help="Example: 1706.03762v7")
@@ -154,26 +172,13 @@ def main() -> None:
     output = PROJECT_ROOT / "research" / "data" / "arxiv" / arxiv_id
     source_path = output / "source.bin"
     report_path = output / "inspection.json"
-    source_url = f"https://arxiv.org/src/{arxiv_id}"
 
     print(f"Inspecting arXiv:{arxiv_id}")
 
     if not cached_source_is_valid(source_path, report_path, arxiv_id):
         download_source(arxiv_id, source_path)
 
-    report = {
-        "arxiv_id": arxiv_id,
-        "source_url": source_url,
-        "inspected_at_utc": datetime.now(UTC).isoformat(),
-        "archive_size_bytes": source_path.stat().st_size,
-        "sha256": sha256_file(source_path),
-        **inspect_source(source_path),
-    }
-
-    report_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    report = save_inspection_report(arxiv_id, source_path)
     print(f"Archive: {source_path}")
     print(f"Report:  {report_path}")
     print(f"Format:  {report['archive_format']}; files: {report['file_count']}")

@@ -135,7 +135,7 @@ def bibliography_title_and_first_author(raw_tex: str) -> tuple[str | None, str |
     if len(parts) < 2:
         return None, None
     author_text = parts[0].replace("~", " ").strip()
-    first_author = author_text.split(",", 1)[0].strip()
+    first_author = re.split(r",|\s+and\s+", author_text, maxsplit=1)[0].strip()
     first_surname = first_author.rstrip(".").split()[-1] if first_author else None
     title = parts[1].replace("~", " ").replace("{", "").replace("}", "").strip()
     return (title or None), first_surname
