@@ -83,6 +83,35 @@ def test_bibliography_clues() -> None:
     assert bibliography_title_and_first_author("No block") == (None, None)
 
 
+@pytest.mark.parametrize(
+    ("raw_tex", "arxiv_id", "title", "first_author"),
+    [
+        (
+            r"Oleksii Kuchaiev and Boris Ginsburg. "
+            r"\newblock Factorization tricks for {LSTM} networks.",
+            "1703.10722v3",
+            "Factorization tricks for LSTM networks",
+            "Oleksii Kuchaiev",
+        ),
+        (
+            r"Ofir Press and Lior Wolf. "
+            r"\newblock Using the output embedding to improve language models.",
+            "1608.05859v3",
+            "Using the Output Embedding to Improve Language Models",
+            "Ofir Press",
+        ),
+    ],
+)
+def test_first_author_separated_by_and(
+    raw_tex: str, arxiv_id: str, title: str, first_author: str
+) -> None:
+    expected_surname = first_author.split()[-1]
+    assert bibliography_title_and_first_author(raw_tex)[1] == expected_surname
+    paper = PaperMetadata(arxiv_id, title, [first_author], None, None, None)
+    result = compare_reference("key", arxiv_id.rsplit("v", 1)[0], raw_tex, paper)
+    assert result.status == "metadata_matched"
+
+
 def test_build_report_from_mock_atom() -> None:
     selected = [
         (
