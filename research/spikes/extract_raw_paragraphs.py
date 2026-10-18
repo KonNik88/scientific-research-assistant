@@ -48,14 +48,10 @@ class RawParagraph:
     source_spans: tuple[SourceSpan, ...]
 
 
-def extract_raw_paragraphs(
+def source_spans_for(
     fragments: list[SourceFragment], *, start: int, end: int
-) -> list[RawParagraph]:
-    """Extract paragraphs in [start, end) of the assembled document.
-
-    Use a section-body range, e.g. heading.assembled_end to the next heading.
-    Raises on block environments/display math rather than silently losing them.
-    """
+) -> tuple[SourceSpan, ...]:
+    """Map an assembled [start, end) range back to its TeX source files."""
     parts: list[SourceFragment] = []
     starts: list[int] = []
     length = 0
@@ -65,6 +61,45 @@ def extract_raw_paragraphs(
         if part.raw_latex:
             parts.append(part)
             starts.append(length)
+            length += len(part.raw_latex)
+
+    if not 0 <= start <= end <= length:
+        raise ValueError("Invalid assembled document range")
+
+    spans: list[SourceSpan] = []
+    cursor = start
+    while cursor < end:
+        index = bisect_right(starts, cursor) - 1
+        if index < 0:
+            raise ValueError("Position outside source fragments")
+        part = parts[index]
+        fragment_end = starts[index] + len(part.raw_latex)
+        segment_end = min(end, fragment_end)
+        if segment_end <= cursor:
+            raise ValueError("Invalid source-fragment mapping")
+        offset = part.start_offset + cursor - starts[index]
+        spans.append(
+            SourceSpan(part.source_file, offset, offset + segment_end - cursor)
+        )
+        cursor = segment_end
+    return tuple(spans)
+
+
+def extract_raw_paragraphs(
+    fragments: list[SourceFragment], *, start: int, end: int
+) -> list[RawParagraph]:
+    """Extract paragraphs in [start, end) of the assembled document.
+
+    Use a section-body range, e.g. heading.assembled_end to the next heading.
+    Raises on block environments/display math rather than silently losing them.
+    """
+    parts: list[SourceFragment] = []
+    length = 0
+    for part in fragments:
+        if part.end_offset - part.start_offset != len(part.raw_latex):
+            raise ValueError(f"Invalid source offsets: {part.source_file}")
+        if part.raw_latex:
+            parts.append(part)
             length += len(part.raw_latex)
 
     if not 0 <= start <= end <= length:
@@ -79,25 +114,6 @@ def extract_raw_paragraphs(
     current_start: int | None = None
     current_end = 0
     meaningful = False
-
-    def spans_for(begin: int, finish: int) -> tuple[SourceSpan, ...]:
-        spans: list[SourceSpan] = []
-        cursor = begin
-        while cursor < finish:
-            index = bisect_right(starts, cursor) - 1
-            if index < 0:
-                raise ValueError("Position outside source fragments")
-            part = parts[index]
-            fragment_end = starts[index] + len(part.raw_latex)
-            segment_end = min(finish, fragment_end)
-            if segment_end <= cursor:
-                raise ValueError("Invalid source-fragment mapping")
-            offset = part.start_offset + cursor - starts[index]
-            spans.append(
-                SourceSpan(part.source_file, offset, offset + segment_end - cursor)
-            )
-            cursor = segment_end
-        return tuple(spans)
 
     def append(begin: int, finish: int, *, content: bool) -> None:
         nonlocal current_start, current_end, meaningful
@@ -123,7 +139,7 @@ def extract_raw_paragraphs(
                         raw_latex=assembled[left:right],
                         assembled_start=left,
                         assembled_end=right,
-                        source_spans=spans_for(left, right),
+                        source_spans=source_spans_for(parts, start=left, end=right),
                     )
                 )
         current_start = None
