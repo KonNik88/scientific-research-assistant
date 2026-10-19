@@ -13,6 +13,7 @@ from typing import Any
 
 from pylatexenc.latexwalker import (  # type: ignore[import-untyped]
     LatexEnvironmentNode,
+    LatexGroupNode,
     LatexMacroNode,
     LatexMathNode,
     LatexWalker,
@@ -43,6 +44,7 @@ _FLOAT_ENVIRONMENTS = {
 }
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
+_LAYOUT_ENVIRONMENTS = {"multicols"}
 
 
 @dataclass(frozen=True)
@@ -89,8 +91,25 @@ class RawQuoteBlock:
     source_spans: tuple[SourceSpan, ...]
 
 
+@dataclass(frozen=True)
+class RawLayoutBlock:
+    """A source-preserving layout wrapper with independently located children."""
+
+    syntax: str
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+    children: tuple[RawBlock, ...]
+
+
 type RawBlock = (
-    RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock | RawQuoteBlock
+    RawParagraph
+    | RawMathBlock
+    | RawFloatBlock
+    | RawListBlock
+    | RawQuoteBlock
+    | RawLayoutBlock
 )
 
 
@@ -139,6 +158,52 @@ def _paired_math_ranges(
     return ranges
 
 
+def _multicols_children(
+    fragments: list[SourceFragment],
+    *,
+    start: int,
+    end: int,
+    paired_math_macros: Mapping[str, str] | None,
+) -> tuple[RawBlock, ...]:
+    """Parse multicols content without treating its column count as text."""
+    assembled = "".join(fragment.raw_latex for fragment in fragments)
+    raw = assembled[start:end]
+
+    nodes, _, _ = LatexWalker(
+        raw,
+        latex_context=_context(),
+    ).get_latex_nodes()
+
+    if len(nodes) != 1 or not isinstance(nodes[0], LatexEnvironmentNode):
+        raise ValueError("Expected one multicols environment")
+
+    outer = nodes[0]
+    if outer.environmentname != "multicols":
+        raise ValueError("Expected multicols environment")
+
+    inner_nodes = list(outer.nodelist or [])
+    if not inner_nodes or not isinstance(inner_nodes[0], LatexGroupNode):
+        raise ValueError("multicols requires a column-count argument")
+
+    column_group = inner_nodes[0]
+    column_count = raw[column_group.pos : column_group.pos + column_group.len]
+
+    if re.fullmatch(r"\{[1-9][0-9]*\}", column_count) is None:
+        raise ValueError(f"Unsupported multicols column count: {column_count!r}")
+
+    body_start = start + column_group.pos + column_group.len
+    body_end = start + inner_nodes[-1].pos + inner_nodes[-1].len
+
+    return tuple(
+        extract_mixed_blocks(
+            fragments,
+            start=body_start,
+            end=body_end,
+            paired_math_macros=paired_math_macros,
+        )
+    )
+
+
 def extract_mixed_blocks(
     fragments: list[SourceFragment],
     *,
@@ -181,6 +246,8 @@ def extract_mixed_blocks(
                 kind = "list"
             elif syntax in _QUOTE_ENVIRONMENTS:
                 kind = "quote"
+            elif syntax in _LAYOUT_ENVIRONMENTS:
+                kind = "layout"
             else:
                 kind = "unsupported"
         elif isinstance(node, LatexMathNode) and node.displaytype == "display":
@@ -213,24 +280,41 @@ def extract_mixed_blocks(
         if begin < cursor:
             raise ValueError("Overlapping mixed blocks")
         blocks.extend(extract_raw_paragraphs(fragments, start=cursor, end=begin))
-        block_type = (
-            RawMathBlock
-            if kind == "math"
-            else RawFloatBlock
-            if kind == "float"
-            else RawListBlock
-            if kind == "list"
-            else RawQuoteBlock
-        )
-        blocks.append(
-            block_type(
-                syntax=syntax,
-                raw_latex=assembled[begin:finish],
-                assembled_start=begin,
-                assembled_end=finish,
-                source_spans=source_spans_for(fragments, start=begin, end=finish),
+        if kind == "layout":
+            blocks.append(
+                RawLayoutBlock(
+                    syntax=syntax,
+                    raw_latex=assembled[begin:finish],
+                    assembled_start=begin,
+                    assembled_end=finish,
+                    source_spans=source_spans_for(fragments, start=begin, end=finish),
+                    children=_multicols_children(
+                        fragments,
+                        start=begin,
+                        end=finish,
+                        paired_math_macros=paired_math_macros,
+                    ),
+                )
             )
-        )
+        else:
+            block_type = (
+                RawMathBlock
+                if kind == "math"
+                else RawFloatBlock
+                if kind == "float"
+                else RawListBlock
+                if kind == "list"
+                else RawQuoteBlock
+            )
+            blocks.append(
+                block_type(
+                    syntax=syntax,
+                    raw_latex=assembled[begin:finish],
+                    assembled_start=begin,
+                    assembled_end=finish,
+                    source_spans=source_spans_for(fragments, start=begin, end=finish),
+                )
+            )
         cursor = finish
 
     blocks.extend(extract_raw_paragraphs(fragments, start=cursor, end=end))
