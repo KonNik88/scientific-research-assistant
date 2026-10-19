@@ -35,6 +35,7 @@ _EQUATION_ENVIRONMENTS = {
 }
 _FLOAT_ENVIRONMENTS = {"table", "table*", "figure", "figure*", "wrapfigure"}
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
+_QUOTE_ENVIRONMENTS = {"quote", "quotation"}
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,22 @@ class RawListBlock:
     assembled_start: int
     assembled_end: int
     source_spans: tuple[SourceSpan, ...]
+
+
+@dataclass(frozen=True)
+class RawQuoteBlock:
+    """A whole quotation/example environment, preserved verbatim."""
+
+    syntax: str
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+
+
+type RawBlock = (
+    RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock | RawQuoteBlock
+)
 
 
 def _paired_math_ranges(
@@ -121,7 +138,7 @@ def extract_mixed_blocks(
     start: int,
     end: int,
     paired_math_macros: Mapping[str, str] | None = None,
-) -> list[RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock]:
+) -> list[RawBlock]:
     """Extract paragraphs, display math, and whole floats from a section body.
 
     Unsupported environments raise, so their contents are not silently lost.
@@ -155,6 +172,8 @@ def extract_mixed_blocks(
                 kind = "float"
             elif syntax in _LIST_ENVIRONMENTS:
                 kind = "list"
+            elif syntax in _QUOTE_ENVIRONMENTS:
+                kind = "quote"
             else:
                 kind = "unsupported"
         elif isinstance(node, LatexMathNode) and node.displaytype == "display":
@@ -181,7 +200,7 @@ def extract_mixed_blocks(
             raise ValueError(f"Unsupported block environment: {syntax}")
         candidates.append((kind, syntax, begin, finish))
 
-    blocks: list[RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock] = []
+    blocks: list[RawBlock] = []
     cursor = start
     for kind, syntax, begin, finish in sorted(candidates, key=lambda block: block[2]):
         if begin < cursor:
@@ -193,6 +212,8 @@ def extract_mixed_blocks(
             else RawFloatBlock
             if kind == "float"
             else RawListBlock
+            if kind == "list"
+            else RawQuoteBlock
         )
         blocks.append(
             block_type(
