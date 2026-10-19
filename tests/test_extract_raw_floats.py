@@ -24,7 +24,9 @@ def parse(
     return extract_mixed_blocks([fragment("main.tex", text)], start=0, end=len(text))
 
 
-@pytest.mark.parametrize("name", ["table", "table*", "figure", "figure*", "wrapfigure"])
+@pytest.mark.parametrize(
+    "name", ["table", "table*", "figure", "figure*", "wrapfigure", "algorithm"]
+)
 def test_whole_float_is_one_block(name: str) -> None:
     float_tex = (
         rf"\begin{{{name}}}"
@@ -136,3 +138,35 @@ def test_unsupported_layout_wrapper_still_fails_explicitly() -> None:
     )
     with pytest.raises(ValueError, match="Unsupported block environment: landscape"):
         parse(text)
+
+
+def test_algorithm_preserves_listing_and_provenance() -> None:
+    algorithm = (
+        "\\begin{algorithm}\r\n"
+        "\\begin{lstlisting}\r\n"
+        "def merge(a, b):\r\n"
+        "    return a + b\r\n"
+        "\\end{lstlisting}\r\n"
+        "\\caption{Learn BPE operations}\r\n"
+        "\\label{bpe-algorithm}\r\n"
+        "\\end{algorithm}"
+    )
+
+    text = f"Before.\n{algorithm}\nAfter."
+    blocks = parse(text)
+
+    assert [type(block) for block in blocks] == [
+        RawParagraph,
+        RawFloatBlock,
+        RawParagraph,
+    ]
+
+    block = blocks[1]
+    assert isinstance(block, RawFloatBlock)
+    assert block.syntax == "algorithm"
+    assert block.raw_latex == algorithm
+    assert text[block.assembled_start : block.assembled_end] == algorithm
+
+    assert len(block.source_spans) == 1
+    assert block.source_spans[0].source_file == "main.tex"
+    assert "\r\n" in block.raw_latex

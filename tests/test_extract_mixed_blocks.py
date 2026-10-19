@@ -139,7 +139,7 @@ def test_align_environments_are_math_blocks(environment: str) -> None:
     assert text[blocks[1].assembled_start : blocks[1].assembled_end] == math
 
 
-@pytest.mark.parametrize("environment", ["lstlisting", "algorithm", "tabular"])
+@pytest.mark.parametrize("environment", ["lstlisting", "tabular"])
 def test_other_environments_raise_rather_than_disappear(environment: str) -> None:
     text = f"Before.\\begin{{{environment}}}content\\end{{{environment}}}After."
     with pytest.raises(ValueError, match="Unsupported block environment"):

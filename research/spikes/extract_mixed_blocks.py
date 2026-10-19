@@ -33,7 +33,14 @@ _EQUATION_ENVIRONMENTS = {
     "align*",
     "eqnarray",
 }
-_FLOAT_ENVIRONMENTS = {"table", "table*", "figure", "figure*", "wrapfigure"}
+_FLOAT_ENVIRONMENTS = {
+    "table",
+    "table*",
+    "figure",
+    "figure*",
+    "wrapfigure",
+    "algorithm",
+}
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
 
@@ -51,9 +58,9 @@ class RawMathBlock:
 
 @dataclass(frozen=True)
 class RawFloatBlock:
-    """A full table/figure float with nested content kept verbatim."""
+    """A complete LaTeX float with nested content preserved verbatim."""
 
-    syntax: str  # "table", "table*", "figure", "figure*", "wrapfigure"
+    syntax: str
     raw_latex: str
     assembled_start: int
     assembled_end: int
