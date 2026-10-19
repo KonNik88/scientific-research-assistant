@@ -1,7 +1,7 @@
-"""Keep paragraphs and display math in source order within a TeX section.
+"""Keep paragraphs, display math, and whole floats in TeX source order.
 
-Research 06b.3 pilot: no math rendering, normalization, or silent skipping
-of other LaTeX environments. Input ranges are in assembled-document offsets.
+Research 06c pilot: preserve tables/figures verbatim, without interpreting
+captions, graphics, or tabular cells. Unsupported environments still raise.
 """
 
 from __future__ import annotations
@@ -23,13 +23,25 @@ from research.spikes.extract_raw_paragraphs import (
 )
 
 _EQUATION_ENVIRONMENTS = {"equation", "equation*", "align", "align*"}
+_FLOAT_ENVIRONMENTS = {"table", "table*", "figure", "figure*", "wrapfigure"}
 
 
 @dataclass(frozen=True)
 class RawMathBlock:
     """One display-math expression, preserved verbatim with provenance."""
 
-    syntax: str  # "equation", "equation*", or "display_math"
+    syntax: str  # Source environment name, or "display_math"
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+
+
+@dataclass(frozen=True)
+class RawFloatBlock:
+    """A full table/figure float with nested content kept verbatim."""
+
+    syntax: str  # "table", "table*", "figure", "figure*", "wrapfigure"
     raw_latex: str
     assembled_start: int
     assembled_end: int
@@ -38,8 +50,8 @@ class RawMathBlock:
 
 def extract_mixed_blocks(
     fragments: list[SourceFragment], *, start: int, end: int
-) -> list[RawParagraph | RawMathBlock]:
-    """Extract paragraphs and supported display math from a section-body range.
+) -> list[RawParagraph | RawMathBlock | RawFloatBlock]:
+    """Extract paragraphs, display math, and whole floats from a section body.
 
     Unsupported environments raise, so their contents are not silently lost.
     All offsets are measured in the assembled document (not a TeX source file).
@@ -52,28 +64,33 @@ def extract_mixed_blocks(
 
     body = assembled[start:end]
     nodes, _, _ = LatexWalker(body, latex_context=_context()).get_latex_nodes()
-    blocks: list[RawParagraph | RawMathBlock] = []
+    blocks: list[RawParagraph | RawMathBlock | RawFloatBlock] = []
     cursor = start
 
     for node in nodes:
+        kind: str | None = None
         syntax: str | None = None
         if isinstance(node, LatexEnvironmentNode):
-            if node.environmentname not in _EQUATION_ENVIRONMENTS:
-                raise ValueError(
-                    f"Unsupported block environment: {node.environmentname}"
-                )
             syntax = node.environmentname
+            if syntax in _EQUATION_ENVIRONMENTS:
+                kind = "math"
+            elif syntax in _FLOAT_ENVIRONMENTS:
+                kind = "float"
+            else:
+                raise ValueError(f"Unsupported block environment: {syntax}")
         elif isinstance(node, LatexMathNode) and node.displaytype == "display":
+            kind = "math"
             syntax = "display_math"
 
-        if syntax is None:
+        if kind is None or syntax is None:
             continue
 
         begin = start + node.pos
         finish = begin + node.len
         blocks.extend(extract_raw_paragraphs(fragments, start=cursor, end=begin))
+        block_type = RawMathBlock if kind == "math" else RawFloatBlock
         blocks.append(
-            RawMathBlock(
+            block_type(
                 syntax=syntax,
                 raw_latex=assembled[begin:finish],
                 assembled_start=begin,

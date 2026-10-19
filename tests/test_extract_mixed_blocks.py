@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from research.spikes.assemble_tex_document import SourceFragment
-from research.spikes.extract_mixed_blocks import RawMathBlock, extract_mixed_blocks
+from research.spikes.extract_mixed_blocks import (
+    RawFloatBlock,
+    RawMathBlock,
+    extract_mixed_blocks,
+)
 from research.spikes.extract_raw_paragraphs import RawParagraph, source_spans_for
 
 
@@ -13,7 +17,7 @@ def fragment(filename: str, text: str, offset: int = 0) -> SourceFragment:
     return SourceFragment(filename, offset, offset + len(text), text)
 
 
-def parse(text: str) -> list[RawParagraph | RawMathBlock]:
+def parse(text: str) -> list[RawParagraph | RawMathBlock | RawFloatBlock]:
     return extract_mixed_blocks([fragment("main.tex", text)], start=0, end=len(text))
 
 
@@ -133,7 +137,7 @@ def test_align_environments_are_math_blocks(environment: str) -> None:
     assert text[blocks[1].assembled_start : blocks[1].assembled_end] == math
 
 
-@pytest.mark.parametrize("environment", ["table", "figure", "lstlisting"])
+@pytest.mark.parametrize("environment", ["lstlisting", "algorithm", "tabular"])
 def test_other_environments_raise_rather_than_disappear(environment: str) -> None:
     text = f"Before.\\begin{{{environment}}}content\\end{{{environment}}}After."
     with pytest.raises(ValueError, match="Unsupported block environment"):
