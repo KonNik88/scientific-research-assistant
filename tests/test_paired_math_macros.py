@@ -7,6 +7,7 @@ import pytest
 from research.spikes.assemble_tex_document import SourceFragment
 from research.spikes.extract_mixed_blocks import (
     RawFloatBlock,
+    RawListBlock,
     RawMathBlock,
     extract_mixed_blocks,
 )
@@ -21,7 +22,7 @@ def fragment(name: str, text: str, offset: int = 0) -> SourceFragment:
 
 def parse(
     text: str, *, pairs: dict[str, str] | None = None
-) -> list[RawParagraph | RawMathBlock | RawFloatBlock]:
+) -> list[RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock]:
     return extract_mixed_blocks(
         [fragment("main.tex", text)],
         start=0,

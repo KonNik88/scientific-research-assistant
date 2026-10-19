@@ -28,6 +28,7 @@ from research.spikes.extract_raw_paragraphs import (
 
 _EQUATION_ENVIRONMENTS = {"equation", "equation*", "align", "align*"}
 _FLOAT_ENVIRONMENTS = {"table", "table*", "figure", "figure*", "wrapfigure"}
+_LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,17 @@ class RawFloatBlock:
     """A full table/figure float with nested content kept verbatim."""
 
     syntax: str  # "table", "table*", "figure", "figure*", "wrapfigure"
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+
+
+@dataclass(frozen=True)
+class RawListBlock:
+    """A whole LaTeX list, including nested items, kept verbatim."""
+
+    syntax: str
     raw_latex: str
     assembled_start: int
     assembled_end: int
@@ -103,7 +115,7 @@ def extract_mixed_blocks(
     start: int,
     end: int,
     paired_math_macros: Mapping[str, str] | None = None,
-) -> list[RawParagraph | RawMathBlock | RawFloatBlock]:
+) -> list[RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock]:
     """Extract paragraphs, display math, and whole floats from a section body.
 
     Unsupported environments raise, so their contents are not silently lost.
@@ -135,6 +147,8 @@ def extract_mixed_blocks(
                 kind = "math"
             elif syntax in _FLOAT_ENVIRONMENTS:
                 kind = "float"
+            elif syntax in _LIST_ENVIRONMENTS:
+                kind = "list"
             else:
                 kind = "unsupported"
         elif isinstance(node, LatexMathNode) and node.displaytype == "display":
@@ -161,13 +175,19 @@ def extract_mixed_blocks(
             raise ValueError(f"Unsupported block environment: {syntax}")
         candidates.append((kind, syntax, begin, finish))
 
-    blocks: list[RawParagraph | RawMathBlock | RawFloatBlock] = []
+    blocks: list[RawParagraph | RawMathBlock | RawFloatBlock | RawListBlock] = []
     cursor = start
     for kind, syntax, begin, finish in sorted(candidates, key=lambda block: block[2]):
         if begin < cursor:
             raise ValueError("Overlapping mixed blocks")
         blocks.extend(extract_raw_paragraphs(fragments, start=cursor, end=begin))
-        block_type = RawMathBlock if kind == "math" else RawFloatBlock
+        block_type = (
+            RawMathBlock
+            if kind == "math"
+            else RawFloatBlock
+            if kind == "float"
+            else RawListBlock
+        )
         blocks.append(
             block_type(
                 syntax=syntax,
