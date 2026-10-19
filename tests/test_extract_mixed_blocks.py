@@ -175,3 +175,29 @@ def test_requested_range_only() -> None:
         r"\begin{equation}x\end{equation}",
         "End.",
     ]
+
+
+def test_eqnarray_preserves_nested_matrix_and_provenance() -> None:
+    math = (
+        r"\begin{eqnarray}"
+        r"\begin{pmatrix}a\\b\end{pmatrix} &=& x \\"
+        r"\label{eq:test}"
+        r"\end{eqnarray}"
+    )
+    text = "Before.\n" + math + "\nAfter."
+
+    blocks = parse(text)
+
+    assert [type(block) for block in blocks] == [
+        RawParagraph,
+        RawMathBlock,
+        RawParagraph,
+    ]
+
+    block = blocks[1]
+    assert isinstance(block, RawMathBlock)
+    assert block.syntax == "eqnarray"
+    assert block.raw_latex == math
+    assert text[block.assembled_start : block.assembled_end] == math
+    assert len(block.source_spans) == 1
+    assert block.source_spans[0].source_file == "main.tex"

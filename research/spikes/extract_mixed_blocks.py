@@ -26,7 +26,13 @@ from research.spikes.extract_raw_paragraphs import (
     source_spans_for,
 )
 
-_EQUATION_ENVIRONMENTS = {"equation", "equation*", "align", "align*"}
+_EQUATION_ENVIRONMENTS = {
+    "equation",
+    "equation*",
+    "align",
+    "align*",
+    "eqnarray",
+}
 _FLOAT_ENVIRONMENTS = {"table", "table*", "figure", "figure*", "wrapfigure"}
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 
