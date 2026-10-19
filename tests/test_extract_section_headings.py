@@ -72,3 +72,39 @@ def test_inconsistent_fragment_offsets_fail() -> None:
     bad = SourceFragment("main.tex", 4, 5, r"\section{Bad}")
     with pytest.raises(ValueError, match="Invalid source offsets"):
         extract_section_headings([bad])
+
+
+def test_run_in_paragraph_heading_preserves_following_text() -> None:
+    raw = (
+        "\\subsection{Gating Network}\n"
+        "\\paragraph{Softmax Gating:} A simple choice.\n"
+        "\\paragraph{Training the Gating Network}\n"
+        "Training proceeds by back-propagation.\n"
+    )
+    headings = extract_section_headings([fragment("main.tex", raw)])
+    assert [heading.level for heading in headings] == [2, 4, 4]
+    assert [heading.title_latex for heading in headings] == [
+        "Gating Network",
+        "Softmax Gating:",
+        "Training the Gating Network",
+    ]
+    for heading in headings:
+        assert raw[heading.assembled_start : heading.assembled_end].endswith(
+            "{" + heading.title_latex + "}"
+        )
+    assert raw[headings[1].assembled_end :].startswith(" A simple choice.")
+    assert raw[headings[2].assembled_end :].startswith(
+        "\nTraining proceeds by back-propagation."
+    )
+
+
+def test_starred_paragraph_with_optional_title() -> None:
+    raw = r"\paragraph*[Short]{Long title} Body."
+    headings = extract_section_headings([fragment("main.tex", raw)])
+    assert len(headings) == 1
+    assert headings[0].level == 4
+    assert headings[0].title_latex == "Long title"
+    assert raw[headings[0].assembled_start : headings[0].assembled_end] == (
+        r"\paragraph*[Short]{Long title}"
+    )
+    assert raw[headings[0].assembled_end :] == " Body."

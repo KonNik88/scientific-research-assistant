@@ -14,11 +14,13 @@ from pylatexenc.latexwalker import (  # type: ignore[import-untyped]
     LatexGroupNode,
     LatexMacroNode,
     LatexWalker,
+    get_default_latex_context_db,
 )
+from pylatexenc.macrospec import MacroSpec  # type: ignore[import-untyped]
 
 from research.spikes.assemble_tex_document import SourceFragment
 
-_LEVELS = {"section": 1, "subsection": 2, "subsubsection": 3}
+_LEVELS = {"section": 1, "subsection": 2, "subsubsection": 3, "paragraph": 4}
 
 
 @dataclass(frozen=True)
@@ -51,7 +53,14 @@ def extract_section_headings(fragments: list[SourceFragment]) -> list[SectionHea
         return []
 
     text = "".join(part.raw_latex for part in parts)
-    nodes, _, _ = LatexWalker(text).get_latex_nodes()
+    context = get_default_latex_context_db()
+    # A run-in \paragraph title is mandatory, with optional star/short title.
+    context.add_context_category(
+        "research06-headings",
+        macros=[MacroSpec("paragraph", "*[{")],
+        prepend=True,
+    )
+    nodes, _, _ = LatexWalker(text, latex_context=context).get_latex_nodes()
     headings: list[SectionHeading] = []
 
     def add_heading(node: Any) -> None:
