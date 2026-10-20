@@ -44,7 +44,7 @@ _FLOAT_ENVIRONMENTS = {
 }
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
-_LAYOUT_ENVIRONMENTS = {"multicols"}
+_LAYOUT_ENVIRONMENTS = {"multicols", "landscape"}
 
 
 @dataclass(frozen=True)
@@ -158,14 +158,15 @@ def _paired_math_ranges(
     return ranges
 
 
-def _multicols_children(
+def _layout_children(
     fragments: list[SourceFragment],
     *,
+    syntax: str,
     start: int,
     end: int,
     paired_math_macros: Mapping[str, str] | None,
 ) -> tuple[RawBlock, ...]:
-    """Parse multicols content without treating its column count as text."""
+    """Extract children of an explicitly supported layout environment."""
     assembled = "".join(fragment.raw_latex for fragment in fragments)
     raw = assembled[start:end]
 
@@ -174,25 +175,45 @@ def _multicols_children(
         latex_context=_context(),
     ).get_latex_nodes()
 
-    if len(nodes) != 1 or not isinstance(nodes[0], LatexEnvironmentNode):
-        raise ValueError("Expected one multicols environment")
+    if (
+        len(nodes) != 1
+        or not isinstance(nodes[0], LatexEnvironmentNode)
+        or nodes[0].pos != 0
+        or nodes[0].len != len(raw)
+    ):
+        raise ValueError("Expected one complete layout environment")
 
     outer = nodes[0]
-    if outer.environmentname != "multicols":
-        raise ValueError("Expected multicols environment")
+    if outer.environmentname != syntax:
+        raise ValueError(f"Expected {syntax} environment")
 
     inner_nodes = list(outer.nodelist or [])
-    if not inner_nodes or not isinstance(inner_nodes[0], LatexGroupNode):
-        raise ValueError("multicols requires a column-count argument")
 
-    column_group = inner_nodes[0]
-    column_count = raw[column_group.pos : column_group.pos + column_group.len]
+    if syntax == "multicols":
+        if not inner_nodes or not isinstance(inner_nodes[0], LatexGroupNode):
+            raise ValueError("multicols requires a column-count argument")
 
-    if re.fullmatch(r"\{[1-9][0-9]*\}", column_count) is None:
-        raise ValueError(f"Unsupported multicols column count: {column_count!r}")
+        column_group = inner_nodes[0]
+        column_count = raw[column_group.pos : column_group.pos + column_group.len]
 
-    body_start = start + column_group.pos + column_group.len
+        if re.fullmatch(r"\{[1-9][0-9]*\}", column_count) is None:
+            raise ValueError(f"Unsupported multicols column count: {column_count!r}")
+
+        body_start = start + column_group.pos + column_group.len
+
+    elif syntax == "landscape":
+        if not inner_nodes:
+            return ()
+
+        body_start = start + inner_nodes[0].pos
+
+    else:
+        raise ValueError(f"Unsupported layout environment: {syntax}")
+
     body_end = start + inner_nodes[-1].pos + inner_nodes[-1].len
+
+    if body_start >= body_end:
+        return ()
 
     return tuple(
         extract_mixed_blocks(
@@ -288,8 +309,9 @@ def extract_mixed_blocks(
                     assembled_start=begin,
                     assembled_end=finish,
                     source_spans=source_spans_for(fragments, start=begin, end=finish),
-                    children=_multicols_children(
+                    children=_layout_children(
                         fragments,
+                        syntax=syntax,
                         start=begin,
                         end=finish,
                         paired_math_macros=paired_math_macros,

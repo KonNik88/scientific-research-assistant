@@ -132,11 +132,12 @@ def test_float_crossing_two_source_files_keeps_both_spans() -> None:
 
 def test_unsupported_layout_wrapper_still_fails_explicitly() -> None:
     text = (
-        r"\begin{landscape}"
-        r"\begin{figure*}\caption{Landscape}\end{figure*}"
-        r"\end{landscape}"
+        r"\begin{minipage}{0.7\textwidth}"
+        r"Standalone content"
+        r"\end{minipage}"
     )
-    with pytest.raises(ValueError, match="Unsupported block environment: landscape"):
+
+    with pytest.raises(ValueError, match="Unsupported block environment: minipage"):
         parse(text)
 
 

@@ -7,6 +7,7 @@ import pytest
 from research.spikes.assemble_tex_document import SourceFragment
 from research.spikes.extract_mixed_blocks import (
     RawBlock,
+    RawFloatBlock,
     RawLayoutBlock,
     RawMathBlock,
     extract_mixed_blocks,
@@ -116,6 +117,108 @@ def test_unsupported_environment_inside_multicols_still_raises() -> None:
         r"\begin{multicols}{2}"
         r"\begin{tabular}{cc}a & b\end{tabular}"
         r"\end{multicols}"
+    )
+
+    with pytest.raises(ValueError, match="Unsupported block environment"):
+        parse(text)
+
+
+def test_landscape_preserves_composite_figure() -> None:
+    figure = (
+        r"\begin{figure*}[p]"
+        r"\begin{minipage}{0.75\textwidth}"
+        r"\includegraphics{word_all.png}"
+        r"\end{minipage}"
+        r"\begin{minipage}{0.75\textwidth}"
+        r"\includegraphics{word_months.png}"
+        r"\end{minipage}"
+        r"\caption{Word representations}"
+        r"\label{fig:words}"
+        r"\end{figure*}"
+    )
+    layout = "\\begin{landscape}\n" + figure + "\n\\end{landscape}"
+    text = "Before.\n" + layout + "\nAfter."
+
+    blocks = parse(text)
+
+    assert [type(block) for block in blocks] == [
+        RawParagraph,
+        RawLayoutBlock,
+        RawParagraph,
+    ]
+
+    wrapper = blocks[1]
+    assert isinstance(wrapper, RawLayoutBlock)
+    assert wrapper.syntax == "landscape"
+    assert wrapper.raw_latex == layout
+    assert len(wrapper.children) == 1
+
+    child = wrapper.children[0]
+    assert isinstance(child, RawFloatBlock)
+    assert child.syntax == "figure*"
+    assert child.raw_latex == figure
+    assert child.raw_latex.count(r"\begin{minipage}") == 2
+    assert r"\caption{Word representations}" in child.raw_latex
+
+    assert wrapper.assembled_start <= child.assembled_start
+    assert child.assembled_end <= wrapper.assembled_end
+    assert text[child.assembled_start : child.assembled_end] == figure
+    assert child.source_spans[0].source_file == "main.tex"
+
+
+def test_landscape_preserves_cross_file_provenance() -> None:
+    first = (
+        r"\begin{landscape}"
+        r"\begin{figure*}\includegraphics{word"
+    )
+    second = (
+        r"_all.png}\caption{Word embedding}"
+        r"\end{figure*}"
+        r"\end{landscape}"
+    )
+
+    fragments = [
+        SourceFragment("main.tex", 10, 10 + len(first), first),
+        SourceFragment("supp.tex", 50, 50 + len(second), second),
+    ]
+
+    blocks = extract_mixed_blocks(
+        fragments,
+        start=0,
+        end=len(first) + len(second),
+    )
+
+    assert len(blocks) == 1
+
+    wrapper = blocks[0]
+    assert isinstance(wrapper, RawLayoutBlock)
+    assert len(wrapper.children) == 1
+
+    child = wrapper.children[0]
+    assert isinstance(child, RawFloatBlock)
+
+    assert [span.source_file for span in wrapper.source_spans] == [
+        "main.tex",
+        "supp.tex",
+    ]
+    assert [span.source_file for span in child.source_spans] == [
+        "main.tex",
+        "supp.tex",
+    ]
+
+    assert child.raw_latex == (
+        r"\begin{figure*}"
+        r"\includegraphics{word_all.png}"
+        r"\caption{Word embedding}"
+        r"\end{figure*}"
+    )
+
+
+def test_unsupported_environment_inside_landscape_raises() -> None:
+    text = (
+        r"\begin{landscape}"
+        r"\begin{tabular}{cc}a & b\end{tabular}"
+        r"\end{landscape}"
     )
 
     with pytest.raises(ValueError, match="Unsupported block environment"):
