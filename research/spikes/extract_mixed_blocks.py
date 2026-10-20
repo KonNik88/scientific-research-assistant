@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from pylatexenc.latexwalker import (  # type: ignore[import-untyped]
+    LatexCharsNode,
+    LatexCommentNode,
     LatexEnvironmentNode,
     LatexGroupNode,
     LatexMacroNode,
@@ -44,7 +46,25 @@ _FLOAT_ENVIRONMENTS = {
 }
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
-_LAYOUT_ENVIRONMENTS = {"multicols", "landscape"}
+_LAYOUT_ENVIRONMENTS = {"multicols", "landscape", "small"}
+
+# Only verified plain BibTeX forms are supported here.
+# Unknown content must still fail rather than be misclassified.
+_BIBLIOGRAPHY_SMALL_RE = re.compile(
+    r"\s*(?:\\vspace\{[^{}\r\n]+\}\s*)?"
+    r"(?:"
+    r"\{\s*\\small\s*"
+    r"(?:\\bibliographystyle\{[^{}\r\n]+\}\s*)?"
+    r"\\bibliography\{[^{}\r\n]+\}\s*\}"
+    r"|"
+    r"(?:\\bibliographystyle\{[^{}\r\n]+\}\s*)?"
+    r"\\bibliography\{[^{}\r\n]+\}"
+    r")\s*"
+)
+
+_BIBLIOGRAPHY_COMMAND_RE = re.compile(
+    r"\\(?P<name>bibliographystyle|bibliography)\{[^{}\r\n]+\}"
+)
 
 
 @dataclass(frozen=True)
@@ -92,6 +112,17 @@ class RawQuoteBlock:
 
 
 @dataclass(frozen=True)
+class RawBibliographyDirectiveBlock:
+    """A BibTeX directive, not an extracted reference entry."""
+
+    syntax: str
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+
+
+@dataclass(frozen=True)
 class RawLayoutBlock:
     """A source-preserving layout wrapper with independently located children."""
 
@@ -110,6 +141,7 @@ type RawBlock = (
     | RawListBlock
     | RawQuoteBlock
     | RawLayoutBlock
+    | RawBibliographyDirectiveBlock
 )
 
 
@@ -204,6 +236,61 @@ def _layout_children(
     elif syntax == "landscape":
         if not inner_nodes:
             return ()
+
+        body_start = start + inner_nodes[0].pos
+
+    elif syntax == "small":
+        if not inner_nodes:
+            raise ValueError("Unsupported small content: empty body")
+
+        body_start = start + inner_nodes[0].pos
+        body_end = start + inner_nodes[-1].pos + inner_nodes[-1].len
+        body = assembled[body_start:body_end]
+
+        if _BIBLIOGRAPHY_SMALL_RE.fullmatch(body) is not None:
+            directives: list[RawBlock] = []
+
+            for match in _BIBLIOGRAPHY_COMMAND_RE.finditer(body):
+                command_start = body_start + match.start()
+                command_end = body_start + match.end()
+
+                directives.append(
+                    RawBibliographyDirectiveBlock(
+                        syntax=match.group("name"),
+                        raw_latex=match.group(0),
+                        assembled_start=command_start,
+                        assembled_end=command_end,
+                        source_spans=source_spans_for(
+                            fragments,
+                            start=command_start,
+                            end=command_end,
+                        ),
+                    )
+                )
+
+            return tuple(directives)
+
+        has_math = any(
+            isinstance(node, LatexEnvironmentNode)
+            and node.environmentname in _EQUATION_ENVIRONMENTS
+            for node in inner_nodes
+        )
+
+        allowed = all(
+            isinstance(node, LatexCommentNode)
+            or (isinstance(node, LatexCharsNode) and not node.chars.strip())
+            or (
+                isinstance(node, LatexEnvironmentNode)
+                and node.environmentname in _EQUATION_ENVIRONMENTS
+            )
+            for node in inner_nodes
+        )
+
+        if not (has_math and allowed):
+            raise ValueError(
+                "Unsupported small content: "
+                "bibliography or other content requires separate handling"
+            )
 
         body_start = start + inner_nodes[0].pos
 

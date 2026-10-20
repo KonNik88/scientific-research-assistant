@@ -6,6 +6,7 @@ import pytest
 
 from research.spikes.assemble_tex_document import SourceFragment
 from research.spikes.extract_mixed_blocks import (
+    RawBibliographyDirectiveBlock,
     RawBlock,
     RawFloatBlock,
     RawLayoutBlock,
@@ -222,4 +223,115 @@ def test_unsupported_environment_inside_landscape_raises() -> None:
     )
 
     with pytest.raises(ValueError, match="Unsupported block environment"):
+        parse(text)
+
+
+def test_small_preserves_nested_equation() -> None:
+    equation = (
+        r"\begin{equation*}"
+        r"\frac{a}{b} = "
+        r"\begin{cases}1 & x=0\\ 0 & x\neq 0\end{cases}"
+        r"\end{equation*}"
+    )
+    text = "\\begin{small}\n" + equation + "\n\\end{small}"
+
+    blocks = parse(text)
+
+    assert len(blocks) == 1
+    wrapper = blocks[0]
+    assert isinstance(wrapper, RawLayoutBlock)
+    assert wrapper.syntax == "small"
+    assert wrapper.raw_latex == text
+    assert len(wrapper.children) == 1
+
+    child = wrapper.children[0]
+    assert isinstance(child, RawMathBlock)
+    assert child.syntax == "equation*"
+    assert child.raw_latex == equation
+    assert r"\begin{cases}" in child.raw_latex
+
+    assert text[child.assembled_start : child.assembled_end] == equation
+    assert child.source_spans[0].source_file == "main.tex"
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (
+            "\n\\vspace{-0.1in}\n\\bibliography{ln_biblio}\n",
+            (("bibliography", r"\bibliography{ln_biblio}"),),
+        ),
+        (
+            "\n\n{\\small\n\\bibliographystyle{ieee}\n\\bibliography{xception}\n}\n\n",
+            (
+                ("bibliographystyle", r"\bibliographystyle{ieee}"),
+                ("bibliography", r"\bibliography{xception}"),
+            ),
+        ),
+    ],
+)
+def test_small_preserves_bibliography_directives(
+    body: str,
+    expected: tuple[tuple[str, str], ...],
+) -> None:
+    text = "\\begin{small}" + body + "\\end{small}"
+
+    blocks = parse(text)
+
+    assert len(blocks) == 1
+    wrapper = blocks[0]
+    assert isinstance(wrapper, RawLayoutBlock)
+    assert wrapper.syntax == "small"
+    assert wrapper.raw_latex == text
+    assert len(wrapper.children) == len(expected)
+
+    for child, (syntax, raw) in zip(wrapper.children, expected, strict=True):
+        assert isinstance(child, RawBibliographyDirectiveBlock)
+        assert child.syntax == syntax
+        assert child.raw_latex == raw
+        assert text[child.assembled_start : child.assembled_end] == raw
+        assert child.source_spans[0].source_file == "main.tex"
+
+
+def test_bibliography_directive_crosses_source_files() -> None:
+    first = "\\begin{small}\n\\bibliography{ln_"
+    second = "biblio}\n\\end{small}"
+
+    fragments = [
+        SourceFragment("main.tex", 10, 10 + len(first), first),
+        SourceFragment("part.tex", 50, 50 + len(second), second),
+    ]
+
+    blocks = extract_mixed_blocks(
+        fragments,
+        start=0,
+        end=len(first) + len(second),
+    )
+
+    assert len(blocks) == 1
+    wrapper = blocks[0]
+    assert isinstance(wrapper, RawLayoutBlock)
+
+    assert len(wrapper.children) == 1
+    child = wrapper.children[0]
+
+    assert isinstance(child, RawBibliographyDirectiveBlock)
+    assert child.raw_latex == r"\bibliography{ln_biblio}"
+    assert [span.source_file for span in child.source_spans] == [
+        "main.tex",
+        "part.tex",
+    ]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        r"\textbf{Unexpected content}",
+        r"\bibliographystyle{ieee}",
+    ],
+)
+def test_unsupported_small_content_still_raises(body: str) -> None:
+    text = "\\begin{small}" + body + "\\end{small}"
+
+    with pytest.raises(ValueError, match="Unsupported small content"):
         parse(text)
