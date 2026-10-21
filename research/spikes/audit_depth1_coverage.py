@@ -26,9 +26,13 @@ from research.spikes.diagnose_depth1_mixed_blocks import (
 from research.spikes.extract_document_frontmatter import (
     extract_frontmatter_abstract,
 )
-from research.spikes.extract_document_labels import extract_standalone_labels
+from research.spikes.extract_document_labels import (
+    RawLabelBlock,
+    extract_standalone_labels,
+)
 from research.spikes.extract_mixed_blocks import extract_mixed_blocks
 from research.spikes.extract_section_headings import extract_section_headings
+from research.spikes.link_section_labels import find_section_label_candidates
 
 type Interval = tuple[int, int, str]
 type Gap = tuple[int, int, str]
@@ -148,6 +152,7 @@ def main() -> None:
     label_contexts: Counter[tuple[str, str]] = Counter()
     validated_label_counts: Counter[str] = Counter()
     review_examples: list[tuple[int, str, tuple[str, ...], str]] = []
+    section_label_candidates: list[tuple[str, str, str, int, str]] = []
 
     for record in records:
         arxiv_id = str(record["arxiv_id"])
@@ -232,6 +237,8 @@ def main() -> None:
             raise ValueError(f"{arxiv_id}: coverage accounting mismatch")
 
         paper_gap_chars: Counter[str] = Counter()
+        paper_labels: list[RawLabelBlock] = []
+        paper_previous_blocks: dict[int, str] = {}
 
         block_ends = {end: kind for _, end, kind in intervals}
         block_starts = {start: kind for start, _, kind in intervals}
@@ -328,40 +335,14 @@ def main() -> None:
                         )
 
                     validated_label_counts[arxiv_id] += 1
+                    paper_labels.append(label)
 
                     previous_kind = block_ends.get(start, "unknown")
                     next_kind = block_starts.get(end, "document_end")
 
                     label_contexts[(previous_kind, next_kind)] += 1
 
-                    if previous_kind == "RawFloatBlock":
-                        previous_heading = next(
-                            (
-                                heading
-                                for heading in reversed(headings)
-                                if heading.assembled_end <= start
-                            ),
-                            None,
-                        )
-
-                        print("\n=== FLOAT-ADJACENT LABEL ===")
-                        print("Article:", arxiv_id)
-                        print("Position:", start, end)
-                        print(
-                            "Section:",
-                            previous_heading.title_latex
-                            if previous_heading is not None
-                            else "unknown",
-                        )
-                        print("Label gap:", repr(raw))
-                        print(
-                            "Before:",
-                            repr(text[max(0, start - 400) : start]),
-                        )
-                        print(
-                            "After:",
-                            repr(text[end : end + 200]),
-                        )
+                    paper_previous_blocks[label.assembled_start] = previous_kind
 
             gap_counts[category] += 1
             gap_chars[category] += size
@@ -370,6 +351,30 @@ def main() -> None:
             if category not in {"whitespace_only", "body_comment_only"}:
                 preview = repr(text[start:end][:160])
                 largest_gaps.append((size, arxiv_id, category, start, end, preview))
+
+        candidates = find_section_label_candidates(
+            headings,
+            paper_labels,
+        )
+
+        if len(candidates) != len(paper_labels):
+            raise ValueError(f"{arxiv_id}: section-label candidate count mismatch")
+
+        for candidate in candidates:
+            label = candidate.label
+            heading = candidate.heading
+
+            previous_kind = paper_previous_blocks[label.assembled_start]
+
+            section_label_candidates.append(
+                (
+                    arxiv_id,
+                    label.key,
+                    heading.title_latex,
+                    label.assembled_start - heading.assembled_end,
+                    previous_kind,
+                )
+            )
 
         total_chars += len(text)
         total_covered += covered
@@ -415,6 +420,26 @@ def main() -> None:
     print("Total:", sum(validated_label_counts.values()))
     print("Articles with labels:", len(validated_label_counts))
     print("By article:", dict(sorted(validated_label_counts.items())))
+
+    print("\n=== SECTION LABEL CANDIDATES ===")
+
+    adjacent_count = sum(
+        candidate[4] == "heading" for candidate in section_label_candidates
+    )
+
+    nonadjacent = [
+        candidate for candidate in section_label_candidates if candidate[4] != "heading"
+    ]
+
+    print("Candidate links:", len(section_label_candidates))
+    print("Directly after heading:", adjacent_count)
+    print("After another block:", len(nonadjacent))
+
+    for article, key, title, distance, previous_kind in nonadjacent:
+        print(
+            f"{article}: {key!r} -> {title!r} "
+            f"(distance={distance}, previous={previous_kind})"
+        )
 
     print("\n=== LARGEST BODY GAPS REQUIRING REVIEW ===")
 
