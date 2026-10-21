@@ -26,6 +26,7 @@ from research.spikes.diagnose_depth1_mixed_blocks import (
 from research.spikes.extract_document_frontmatter import (
     extract_frontmatter_abstract,
 )
+from research.spikes.extract_document_labels import extract_standalone_labels
 from research.spikes.extract_mixed_blocks import extract_mixed_blocks
 from research.spikes.extract_section_headings import extract_section_headings
 
@@ -145,6 +146,7 @@ def main() -> None:
     largest_gaps: list[tuple[int, str, str, int, int, str]] = []
     review_patterns: Counter[tuple[str, ...]] = Counter()
     label_contexts: Counter[tuple[str, str]] = Counter()
+    validated_label_counts: Counter[str] = Counter()
     review_examples: list[tuple[int, str, tuple[str, ...], str]] = []
 
     for record in records:
@@ -252,13 +254,114 @@ def main() -> None:
                 )
 
                 if pattern == ("no_active_nodes",):
-                    print(f"UNCLASSIFIED: {arxiv_id} [{start}:{end}] raw={raw!r}")
+                    print(f"\nUNCLASSIFIED: {arxiv_id} [{start}:{end}]")
+                    print("Raw:", repr(raw))
+                    print(
+                        "Before:",
+                        repr(text[max(0, start - 300) : start]),
+                    )
 
                 if pattern == ("macro:label",):
+                    nodes, _, _ = LatexWalker(
+                        raw,
+                        latex_context=_context(),
+                        tolerant_parsing=True,
+                    ).get_latex_nodes()
+
+                    label_nodes = [
+                        node
+                        for node in nodes
+                        if isinstance(node, LatexMacroNode)
+                        and node.macroname == "label"
+                    ]
+
+                    if len(label_nodes) != 1:
+                        raise ValueError(
+                            f"{arxiv_id}: expected one label AST node "
+                            f"in [{start}:{end}], found {len(label_nodes)}"
+                        )
+
+                    label_node = label_nodes[0]
+
+                    label_start = start + label_node.pos
+                    label_end = label_start + label_node.len
+
+                    labels = extract_standalone_labels(
+                        fragments,
+                        start=label_start,
+                        end=label_end,
+                    )
+
+                    # Report any content outside the extracted label.
+                    before_label = raw[: label_node.pos]
+                    after_label = raw[label_node.pos + label_node.len :]
+
+                    for remainder in (before_label, after_label):
+                        if remainder.strip() and not is_comment_only(remainder):
+                            print(
+                                f"LABEL RESIDUAL: {arxiv_id} "
+                                f"[{start}:{end}] {remainder!r}"
+                            )
+
+                    if len(labels) != 1:
+                        raise ValueError(
+                            f"{arxiv_id}: expected one label in "
+                            f"[{start}:{end}], found {len(labels)}"
+                        )
+
+                    label = labels[0]
+
+                    if (
+                        text[label.assembled_start : label.assembled_end]
+                        != label.raw_latex
+                    ):
+                        raise ValueError(f"{arxiv_id}: label content mismatch")
+
+                    span_chars = sum(
+                        span.end_offset - span.start_offset
+                        for span in label.source_spans
+                    )
+
+                    if span_chars != len(label.raw_latex):
+                        raise ValueError(
+                            f"{arxiv_id}: label provenance length mismatch"
+                        )
+
+                    validated_label_counts[arxiv_id] += 1
+
                     previous_kind = block_ends.get(start, "unknown")
                     next_kind = block_starts.get(end, "document_end")
 
                     label_contexts[(previous_kind, next_kind)] += 1
+
+                    if previous_kind == "RawFloatBlock":
+                        previous_heading = next(
+                            (
+                                heading
+                                for heading in reversed(headings)
+                                if heading.assembled_end <= start
+                            ),
+                            None,
+                        )
+
+                        print("\n=== FLOAT-ADJACENT LABEL ===")
+                        print("Article:", arxiv_id)
+                        print("Position:", start, end)
+                        print(
+                            "Section:",
+                            previous_heading.title_latex
+                            if previous_heading is not None
+                            else "unknown",
+                        )
+                        print("Label gap:", repr(raw))
+                        print(
+                            "Before:",
+                            repr(text[max(0, start - 400) : start]),
+                        )
+                        print(
+                            "After:",
+                            repr(text[end : end + 200]),
+                        )
 
             gap_counts[category] += 1
             gap_chars[category] += size
@@ -298,25 +401,30 @@ def main() -> None:
     print("Gap counts:", dict(sorted(gap_counts.items())))
     print("Gap characters:", dict(sorted(gap_chars.items())))
 
-    print("\n=== LARGEST NON-WHITESPACE GAPS ===")
-
     print("\n=== ACTIVE NODE PATTERNS ===")
 
     for pattern, count in review_patterns.most_common(20):
         print(f"{count:3d} gaps | {pattern}")
-
-    print("\n=== LARGEST BODY GAPS REQUIRING REVIEW ===")
 
     print("\n=== LABEL CONTEXTS ===")
 
     for (previous, following), count in label_contexts.most_common():
         print(f"{count:3d} gaps | {previous} -> label -> {following}")
 
+    print("\n=== VALIDATED STANDALONE LABELS ===")
+    print("Total:", sum(validated_label_counts.values()))
+    print("Articles with labels:", len(validated_label_counts))
+    print("By article:", dict(sorted(validated_label_counts.items())))
+
+    print("\n=== LARGEST BODY GAPS REQUIRING REVIEW ===")
+
     for size, arxiv_id, pattern, preview in sorted(
         review_examples,
         reverse=True,
     )[:15]:
         print(f"{arxiv_id}: {size} chars | {pattern} | {preview}")
+
+    print("\n=== LARGEST NON-WHITESPACE GAPS ===")
 
     for size, arxiv_id, category, start, end, preview in sorted(
         largest_gaps,
