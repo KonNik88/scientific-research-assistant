@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from collections import Counter
@@ -25,10 +26,16 @@ from research.spikes.diagnose_depth1_mixed_blocks import (
     PDF_WRAPPER_ID,
     main_tex_for,
 )
+from research.spikes.extract_icml_author_fields import (
+    extract_icml_author_fields,
+)
 from research.spikes.extract_section_headings import extract_section_headings
 from research.spikes.extract_tex_bibliography import (
     mask_tex_comments,
     read_tex_from_tar,
+)
+from research.spikes.normalize_icml_author_fields import (
+    normalize_icml_author_fields,
 )
 
 _METADATA_COMMAND = re.compile(
@@ -36,7 +43,7 @@ _METADATA_COMMAND = re.compile(
 )
 
 
-def main() -> None:
+def main(*, show_authors: bool = False) -> None:
     covered_articles = 0
     title_candidates = 0
     author_candidates = 0
@@ -136,6 +143,22 @@ def main() -> None:
             first_heading_start=first_heading_start,
         )
 
+        if show_authors:
+            for candidate in metadata.authors:
+                print(f"\n=== AUTHOR CANDIDATE: {arxiv_id} ===")
+                print(f"Command: {candidate.name}")
+                print(f"Source type: {type(candidate).__name__}")
+                print(f"Raw: {ascii(candidate.raw_latex)}")
+
+                if candidate.name == "icmlauthor":
+                    fields = extract_icml_author_fields(candidate.raw_latex)
+                    normalized = normalize_icml_author_fields(fields)
+
+                    print(f"First argument: {ascii(fields.first_argument)}")
+                    print(f"Second argument: {ascii(fields.second_argument)}")
+                    print(f"First text: {ascii(normalized.first_text)}")
+                    print(f"Second text: {ascii(normalized.second_text)}")
+
         commands = list(metadata.body)
 
         if not metadata.titles or not metadata.authors:
@@ -214,4 +237,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--show-authors",
+        action="store_true",
+        help="Print raw author metadata candidates",
+    )
+    args = parser.parse_args()
+
+    main(show_authors=args.show_authors)
