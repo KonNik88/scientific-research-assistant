@@ -37,7 +37,6 @@ def _skip_group(
         char = text[pos]
 
         if char == "\\":
-            # Escaped delimiters are not group boundaries.
             pos += 2
             continue
 
@@ -87,7 +86,6 @@ def _definition_end(
     if name in _PRIMITIVE_DEFINITIONS:
         pos = _skip_macro_name(text, pos)
 
-        # Skip the parameter template up to the replacement body.
         while pos < len(text):
             if text[pos] == "{":
                 return _skip_group(text, pos, "{", "}")

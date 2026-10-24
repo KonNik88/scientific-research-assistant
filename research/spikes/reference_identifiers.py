@@ -1,6 +1,6 @@
 """Extract explicit DOI/arXiv identifiers from raw bibliography observations.
 
-Research spike: an identifier is only a *candidate*, not a verified paper match.
+an identifier is only a *candidate*, not a verified paper match.
 Adapted from normalization ideas in ML Research Radar, without its dependencies.
 """
 

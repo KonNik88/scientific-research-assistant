@@ -1,6 +1,6 @@
 """Compare explicit bibliography arXiv IDs with metadata from the arXiv API.
 
-Research spike 04a: a metadata match is not a final canonical identity decision.
+a metadata match is not a final canonical identity decision.
 """
 
 import argparse

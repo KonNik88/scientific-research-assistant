@@ -1,6 +1,6 @@
 """Inspect active LaTeX citation commands in an arXiv source TAR.
 
-Research spike v0.1: common citation commands and braced TeX includes only.
+common citation commands and braced TeX includes only.
 No TeX execution or extraction to disk. Not a general-purpose TeX interpreter.
 """
 

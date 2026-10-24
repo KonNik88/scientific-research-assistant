@@ -1,6 +1,6 @@
 """Assemble TeX body fragments in document order, preserving source offsets.
 
-Research 06a: expand static input/include commands without running LaTeX.
+expand static input/include commands without running LaTeX.
 No text cleaning, macro expansion, or scientific block extraction is attempted.
 """
 
@@ -77,6 +77,8 @@ def _find_includes(nodes: list[Any]) -> list[Any]:
 
 
 def _include_target(node: Any, text: str) -> str:
+    """Extract a static braced TeX include target, rejecting dynamic syntax."""
+
     if node.nodeargd is None or not node.nodeargd.argnlist:
         raise ValueError("TeX include has no braced argument")
     arg = node.nodeargd.argnlist[0]
@@ -125,8 +127,6 @@ def assemble_tex_document(source_path: Path, *, main_tex: str) -> list[SourceFra
             walker = LatexWalker(text, latex_context=context)
 
             if root:
-                # Macro definitions in the preamble may contain incomplete
-                # environments, confusing a parse starting at position zero.
                 begins = list(_DOCUMENT_BEGIN.finditer(mask_tex_comments(text)))
                 if len(begins) != 1:
                     raise ValueError("Expected one document environment in main TeX")

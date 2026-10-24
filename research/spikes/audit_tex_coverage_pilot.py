@@ -1,4 +1,4 @@
-"""Research 06d.1: inspect top-level TeX coverage for one real paper."""
+"""inspect top-level TeX coverage for one real paper."""
 
 from __future__ import annotations
 

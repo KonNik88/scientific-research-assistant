@@ -1,6 +1,6 @@
 """Inspect TeX structure in acquired depth-1 sources without compiling LaTeX.
 
-Research probe: main-file candidates and simple content signals, not text extraction.
+main-file candidates and simple content signals, not text extraction.
 """
 
 import argparse

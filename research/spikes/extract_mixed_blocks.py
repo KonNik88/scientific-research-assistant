@@ -1,6 +1,6 @@
 """Keep paragraphs, display math, and whole floats in TeX source order.
 
-Research 06c pilot: preserve tables/figures verbatim, without interpreting
+preserve tables/figures verbatim, without interpreting
 captions, graphics, or tabular cells. Unsupported environments still raise.
 """
 
@@ -48,8 +48,6 @@ _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
 _LAYOUT_ENVIRONMENTS = {"multicols", "landscape", "small"}
 
-# Only verified plain BibTeX forms are supported here.
-# Unknown content must still fail rather than be misclassified.
 _BIBLIOGRAPHY_SMALL_RE = re.compile(
     r"\s*(?:\\vspace\{[^{}\r\n]+\}\s*)?"
     r"(?:"
@@ -179,8 +177,7 @@ def _paired_math_ranges(
             opening, begin = active
             if closings[name] != opening:
                 raise ValueError(f"Mismatched math macro closing: {opening} -> {name}")
-            # Use the closing *token* length, not node.len: pylatexenc may
-            # include trailing whitespace in a macro node's range.
+
             finish = node.pos + len(name) + 1
             ranges.append((begin, finish, f"macro:{opening}"))
             active = None
@@ -325,7 +322,7 @@ def extract_mixed_blocks(
     Paired math aliases are opt-in after checking the article's definitions.
     All offsets are measured in the assembled document (not a TeX source file).
     """
-    # Validate the source mapping and range before passing the slice to LatexWalker.
+
     source_spans_for(fragments, start=start, end=end)
     assembled = "".join(fragment.raw_latex for fragment in fragments)
     if start == end:
@@ -371,7 +368,6 @@ def extract_mixed_blocks(
             outer_begin <= begin and finish <= outer_end
             for _, _, outer_begin, outer_end in paired
         ):
-            # For example, bmatrix belongs to the surrounding \bea...\eea.
             continue
         if any(
             begin < outer_end and finish > outer_begin

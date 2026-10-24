@@ -1,6 +1,6 @@
 """Extract TeX section headings from an assembled document with source offsets.
 
-Research 06b.1: headings only. No text cleaning or macro expansion.
+headings only. No text cleaning or macro expansion.
 """
 
 from __future__ import annotations
@@ -54,7 +54,6 @@ def extract_section_headings(fragments: list[SourceFragment]) -> list[SectionHea
 
     text = "".join(part.raw_latex for part in parts)
     context = get_default_latex_context_db()
-    # A run-in \paragraph title is mandatory, with optional star/short title.
     context.add_context_category(
         "research06-headings",
         macros=[MacroSpec("paragraph", "*[{")],

@@ -1,6 +1,6 @@
 """Extract raw paragraphs from a selected region of assembled TeX.
 
-Research 06b.2 pilot: preserve original LaTeX and source spans. No text
+preserve original LaTeX and source spans. No text
 normalization; block environments must be handled by a later extraction step.
 """
 

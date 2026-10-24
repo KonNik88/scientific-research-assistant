@@ -1,4 +1,4 @@
-"""Research 06c.5b: inspect real TeX environments behind the 14 section failures.
+"""Inspect real TeX environments behind the 14 section failures.
 
 Read only the local arXiv archives and Research 06c.5 JSON diagnostic.
 This is an inspection tool, NOT a parser change or a content-coverage audit.

@@ -1,4 +1,4 @@
-"""Research 06d.1: audit top-level TeX coverage across depth-1 papers."""
+"""audit top-level TeX coverage across depth-1 papers."""
 
 from __future__ import annotations
 
@@ -146,7 +146,6 @@ def main() -> None:
     gap_counts: Counter[str] = Counter()
     gap_chars: Counter[str] = Counter()
 
-    # (length, article, category, start, end, preview)
     largest_gaps: list[tuple[int, str, str, int, int, str]] = []
     review_patterns: Counter[tuple[str, ...]] = Counter()
     label_contexts: Counter[tuple[str, str]] = Counter()

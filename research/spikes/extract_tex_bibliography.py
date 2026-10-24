@@ -1,6 +1,6 @@
 """Extract raw LaTeX bibliography entries from one arXiv TAR source archive.
 
-Research spike: only thebibliography/bibitem, not .bib files or citation resolution.
+only thebibliography/bibitem, not .bib files or citation resolution.
 No extraction to disk and no LaTeX execution.
 """
 

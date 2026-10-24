@@ -1,7 +1,4 @@
-"""Verify arXiv identifiers for the seed paper's depth-1 references.
-
-Reuse the Research 04 verifier. This step retrieves metadata, not source archives.
-"""
+"""Verify arXiv identifiers for the seed paper's depth-1 references."""
 
 import argparse
 import hashlib
@@ -170,7 +167,6 @@ def verify_depth1_metadata(
             payload = download_feed(url)
             requested_network = True
 
-        # Validate before caching. In particular, reject unexpected arXiv IDs.
         verified = build_verification_report(references, payload)
         if not feed_path.is_file() or refresh:
             feed_path.write_bytes(payload)

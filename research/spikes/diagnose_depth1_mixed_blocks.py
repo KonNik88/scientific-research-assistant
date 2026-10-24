@@ -1,4 +1,4 @@
-"""Research 06c.5: repeat mixed-block diagnosis on 21 depth-1 TeX papers.
+"""Repeat mixed-block diagnosis on 21 depth-1 TeX papers.
 
 Read local source archives only; leave existing parsers and Git untouched.
 This measures section-range success, NOT scientific-content coverage.
