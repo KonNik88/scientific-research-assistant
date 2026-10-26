@@ -37,6 +37,7 @@ class BibItem:
     source_file: str
     start_line: int
     end_line: int
+    header_latex: str = ""
 
 
 def mask_tex_comments(text: str) -> str:
@@ -100,7 +101,7 @@ def extract_bibliography(text: str, *, source_file: str) -> list[BibItem]:
             )
             segment = text[content_start:content_end]
             raw_tex = segment.strip()
-            if not raw_tex:
+            if not mask_tex_comments(segment).strip():
                 raise ValueError(f"Empty bibliography entry: {key!r}")
             last_character = content_start + len(segment.rstrip()) - 1
             entries.append(
@@ -110,6 +111,7 @@ def extract_bibliography(text: str, *, source_file: str) -> list[BibItem]:
                     source_file=source_file,
                     start_line=text.count("\n", 0, command_start) + 1,
                     end_line=text.count("\n", 0, last_character) + 1,
+                    header_latex=text[command_start:content_start],
                 )
             )
         cursor = end.end()

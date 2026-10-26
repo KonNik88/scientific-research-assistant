@@ -159,3 +159,31 @@ def test_read_bbl_member_from_tar(tmp_path: Path) -> None:
     assert loaded == contents.decode("utf-8")
     assert encoding == "utf-8"
     assert not (tmp_path / "references.bbl").exists()
+
+
+def test_preserves_bibitem_header() -> None:
+    text = (
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem[Smith et al.(2020)]{smith2020}\n"
+        "Some reference.\n"
+        "\\end{thebibliography}\n"
+    )
+
+    entries = extract_bibliography(text, source_file="main.bbl")
+
+    assert len(entries) == 1
+    assert entries[0].key == "smith2020"
+    assert entries[0].header_latex == (r"\bibitem[Smith et al.(2020)]{smith2020}")
+    assert entries[0].raw_tex == "Some reference."
+
+
+def test_rejects_comment_only_bibitem() -> None:
+    text = (
+        "\\begin{thebibliography}{9}\n"
+        "\\bibitem{empty}\n"
+        "% This is only a comment.\n"
+        "\\end{thebibliography}\n"
+    )
+
+    with pytest.raises(ValueError, match="Empty bibliography entry"):
+        extract_bibliography(text, source_file="main.bbl")
