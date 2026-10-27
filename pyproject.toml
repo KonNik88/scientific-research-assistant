@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "pydantic>=2,<3",
     "pylatexenc==2.11",
 ]
 
