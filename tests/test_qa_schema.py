@@ -1,7 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from research.spikes.qa_schema import QACandidate, validate_evidence
+from research.spikes.qa_schema import (
+    QACandidate,
+    align_evidence_quote,
+    validate_evidence,
+)
 
 
 def test_accepts_exact_evidence() -> None:
@@ -52,3 +56,28 @@ def test_rejects_unexpected_fields() -> None:
                 "source_id": "invented-by-model",
             }
         )
+
+
+def test_aligns_evidence_across_line_break() -> None:
+    source = "The improvement is more apparent with longer\nsentences."
+    quote = "The improvement is more apparent with longer sentences."
+
+    aligned, start, end = align_evidence_quote(source, quote)
+
+    assert aligned == source
+    assert (start, end) == (0, len(source))
+
+
+def test_alignment_rejects_rewritten_evidence() -> None:
+    source = "and also lets the model focus on relevant information."
+    quote = "This lets the model focus on relevant information."
+
+    with pytest.raises(ValueError, match="Expected one evidence match"):
+        align_evidence_quote(source, quote)
+
+
+def test_alignment_rejects_ambiguous_evidence() -> None:
+    source = "Layer normalization. Layer normalization."
+
+    with pytest.raises(ValueError, match="found 2"):
+        align_evidence_quote(source, "Layer normalization.")

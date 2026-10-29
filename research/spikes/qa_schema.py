@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -28,3 +30,24 @@ def validate_evidence(
     """Require evidence to appear verbatim in the source paragraph."""
     if candidate.evidence_quote not in raw_latex:
         raise ValueError("Evidence quote not found in source paragraph")
+
+
+def align_evidence_quote(
+    raw_latex: str,
+    quote: str,
+) -> tuple[str, int, int]:
+    """Find evidence allowing whitespace differences only."""
+    words = quote.split()
+
+    if not words:
+        raise ValueError("Evidence quote is empty")
+
+    pattern = r"\s+".join(re.escape(word) for word in words)
+    matches = list(re.finditer(pattern, raw_latex))
+
+    if len(matches) != 1:
+        raise ValueError(f"Expected one evidence match, found {len(matches)}")
+
+    match = matches[0]
+
+    return match.group(0), match.start(), match.end()
