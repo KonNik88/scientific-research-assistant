@@ -138,12 +138,18 @@ def main() -> None:
         default=PROMPT_PATH,
         help="Path to the QA generation prompt",
     )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=INPUT_PATH,
+        help="Input JSONL with source paragraphs",
+    )
     args = parser.parse_args()
     system_prompt = args.prompt.read_text(encoding="utf-8")
 
     sources = [
         json.loads(line)
-        for line in INPUT_PATH.read_text(encoding="utf-8").splitlines()
+        for line in args.input.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
 
