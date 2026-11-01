@@ -1,7 +1,8 @@
-"""Export source paragraphs for the initial QA dataset pilot."""
+"""Export source paragraphs for QA dataset experiments."""
 
 from __future__ import annotations
 
+import argparse
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -13,7 +14,6 @@ from research.spikes.extract_section_headings import extract_section_headings
 from research.spikes.inspect_arxiv_source import sha256_file
 
 ARXIV_ROOT = Path("research/data/arxiv")
-OUTPUT_PATH = Path("research/data/qa_pilot/source_paragraphs.jsonl")
 
 PILOT_PAPERS = {
     "1607.06450v1": "ln_paper_arxiv.tex",
@@ -21,14 +21,42 @@ PILOT_PAPERS = {
     "1512.00567v3": "arxiv.tex",
 }
 
+RESEARCH_08_5B_PAPERS = {
+    "1406.1078v3": "arxiv.tex",
+    "1508.07909v5": "subword.tex",
+    "1610.02357v3": "xception.tex",
+    "1706.03762v7": "ms.tex",
+}
+
+PAPER_SETS = {
+    "pilot": PILOT_PAPERS,
+    "research08_5b": RESEARCH_08_5B_PAPERS,
+}
+
 
 def main() -> None:
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument(
+        "--paper-set",
+        required=True,
+        choices=PAPER_SETS,
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+    )
+
+    args = parser.parse_args()
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
 
     total = 0
 
-    with OUTPUT_PATH.open("w", encoding="utf-8") as output:
-        for paper_id, main_tex in PILOT_PAPERS.items():
+    with args.output.open("x", encoding="utf-8") as output:
+        for paper_id, main_tex in PAPER_SETS[args.paper_set].items():
             source_path = ARXIV_ROOT / paper_id / "source.bin"
             source_hash = sha256_file(source_path)
 
@@ -97,7 +125,7 @@ def main() -> None:
             )
 
     print(f"\nTotal paragraphs: {total}")
-    print(f"Output: {OUTPUT_PATH}")
+    print(f"Output: {args.output}")
 
 
 if __name__ == "__main__":
