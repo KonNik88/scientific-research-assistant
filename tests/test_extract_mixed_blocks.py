@@ -6,6 +6,7 @@ import pytest
 
 from research.spikes.assemble_tex_document import SourceFragment
 from research.spikes.extract_mixed_blocks import (
+    RawBibliographyBlock,
     RawBlock,
     RawMathBlock,
     extract_mixed_blocks,
@@ -198,5 +199,37 @@ def test_eqnarray_preserves_nested_matrix_and_provenance() -> None:
     assert block.syntax == "eqnarray"
     assert block.raw_latex == math
     assert text[block.assembled_start : block.assembled_end] == math
+    assert len(block.source_spans) == 1
+    assert block.source_spans[0].source_file == "main.tex"
+
+
+def test_thebibliography_preserves_entries_and_surrounding_text() -> None:
+    bibliography = (
+        "\\begin{thebibliography}{10}\n"
+        "\\bibitem{example2020}\n"
+        "A. Author.\n"
+        "\\newblock Example paper.\n"
+        "\\end{thebibliography}"
+    )
+    text = "We thank our colleagues.\n\n" + bibliography + "\n\nFinal text."
+
+    blocks = parse(text)
+
+    assert [type(block) for block in blocks] == [
+        RawParagraph,
+        RawBibliographyBlock,
+        RawParagraph,
+    ]
+
+    assert blocks[0].raw_latex == "We thank our colleagues."
+    assert blocks[2].raw_latex == "Final text."
+
+    block = blocks[1]
+    assert isinstance(block, RawBibliographyBlock)
+    assert block.syntax == "thebibliography"
+    assert block.raw_latex == bibliography
+
+    assert text[block.assembled_start : block.assembled_end] == bibliography
+
     assert len(block.source_spans) == 1
     assert block.source_spans[0].source_file == "main.tex"

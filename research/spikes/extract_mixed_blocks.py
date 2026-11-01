@@ -47,6 +47,7 @@ _FLOAT_ENVIRONMENTS = {
 _LIST_ENVIRONMENTS = {"itemize", "enumerate"}
 _QUOTE_ENVIRONMENTS = {"quote", "quotation"}
 _LAYOUT_ENVIRONMENTS = {"multicols", "landscape", "small"}
+_BIBLIOGRAPHY_ENVIRONMENTS = {"thebibliography"}
 
 _BIBLIOGRAPHY_SMALL_RE = re.compile(
     r"\s*(?:\\vspace\{[^{}\r\n]+\}\s*)?"
@@ -121,6 +122,17 @@ class RawBibliographyDirectiveBlock:
 
 
 @dataclass(frozen=True)
+class RawBibliographyBlock:
+    """A whole thebibliography environment kept with source provenance."""
+
+    syntax: str
+    raw_latex: str
+    assembled_start: int
+    assembled_end: int
+    source_spans: tuple[SourceSpan, ...]
+
+
+@dataclass(frozen=True)
 class RawLayoutBlock:
     """A source-preserving layout wrapper with independently located children."""
 
@@ -140,6 +152,7 @@ type RawBlock = (
     | RawQuoteBlock
     | RawLayoutBlock
     | RawBibliographyDirectiveBlock
+    | RawBibliographyBlock
 )
 
 
@@ -353,6 +366,8 @@ def extract_mixed_blocks(
                 kind = "quote"
             elif syntax in _LAYOUT_ENVIRONMENTS:
                 kind = "layout"
+            elif syntax in _BIBLIOGRAPHY_ENVIRONMENTS:
+                kind = "bibliography"
             else:
                 kind = "unsupported"
         elif isinstance(node, LatexMathNode) and node.displaytype == "display":
@@ -410,6 +425,8 @@ def extract_mixed_blocks(
                 else RawListBlock
                 if kind == "list"
                 else RawQuoteBlock
+                if kind == "quote"
+                else RawBibliographyBlock
             )
             blocks.append(
                 block_type(
