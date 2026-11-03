@@ -323,3 +323,145 @@ def test_cli_does_not_overwrite_existing_output(
         main()
 
     assert output_path.read_text(encoding="utf-8") == original_content
+
+
+def test_multiple_qa_per_source_are_allowed(tmp_path: Path) -> None:
+    source_path, input_path, review_path = make_files(
+        tmp_path,
+        accepted=True,
+    )
+
+    original = json.loads(input_path.read_text(encoding="utf-8"))
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+
+    second_original = {
+        **original,
+        "qa_id": "qa_0002",
+        "question": "What was the second finding?",
+    }
+
+    second_review = {
+        **review,
+        "qa_id": "qa_0002",
+    }
+
+    write_jsonl(input_path, [original, second_original])
+    write_jsonl(review_path, [review, second_review])
+
+    records = apply_second_pass(
+        source_path,
+        input_path,
+        review_path,
+    )
+
+    assert len(records) == 2
+    assert {record["qa_id"] for record in records} == {
+        "qa_0001",
+        "qa_0002",
+    }
+
+
+def test_review_subset_is_allowed_when_enabled(tmp_path: Path) -> None:
+    source_path, input_path, review_path = make_files(
+        tmp_path,
+        accepted=True,
+    )
+
+    original = json.loads(input_path.read_text(encoding="utf-8"))
+
+    second_original = {
+        **original,
+        "qa_id": "qa_0002",
+    }
+
+    write_jsonl(input_path, [original, second_original])
+
+    with pytest.raises(ValueError, match="QA IDs differ"):
+        apply_second_pass(
+            source_path,
+            input_path,
+            review_path,
+        )
+
+    records = apply_second_pass(
+        source_path,
+        input_path,
+        review_path,
+        allow_review_subset=True,
+    )
+
+    assert len(records) == 1
+    assert records[0]["qa_id"] == "qa_0001"
+
+
+def test_review_subset_rejects_unknown_qa_id(tmp_path: Path) -> None:
+    source_path, input_path, review_path = make_files(
+        tmp_path,
+        accepted=True,
+    )
+
+    update_first_record(
+        review_path,
+        qa_id="qa_unknown",
+    )
+
+    with pytest.raises(ValueError, match="Unknown reviewed QA IDs"):
+        apply_second_pass(
+            source_path,
+            input_path,
+            review_path,
+            allow_review_subset=True,
+        )
+
+
+def test_evidence_extension_updates_source_file_span(
+    tmp_path: Path,
+) -> None:
+    source_path, input_path, review_path = make_files(tmp_path)
+
+    source = json.loads(source_path.read_text(encoding="utf-8"))
+    original = json.loads(input_path.read_text(encoding="utf-8"))
+
+    raw_latex = source["raw_latex"]
+    source_start = 1000
+
+    update_first_record(
+        source_path,
+        source_spans=[
+            {
+                "source_file": "paper.tex",
+                "start_offset": source_start,
+                "end_offset": source_start + len(raw_latex),
+            }
+        ],
+    )
+
+    update_first_record(
+        input_path,
+        evidence_source_span={
+            "source_file": "paper.tex",
+            "start_offset": (source_start + original["evidence_start_in_raw_latex"]),
+            "end_offset": (source_start + original["evidence_end_in_raw_latex"]),
+        },
+    )
+
+    update_first_record(
+        review_path,
+        evidence_action="extend",
+        proposed_evidence_start_in_raw_latex=0,
+        proposed_evidence_end_in_raw_latex=len(raw_latex),
+    )
+
+    records = apply_second_pass(
+        source_path,
+        input_path,
+        review_path,
+    )
+
+    record = records[0]
+
+    assert record["evidence_source_span"] == {
+        "source_file": "paper.tex",
+        "start_offset": source_start,
+        "end_offset": source_start + len(raw_latex),
+    }

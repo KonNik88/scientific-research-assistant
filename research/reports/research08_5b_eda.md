@@ -2,8 +2,8 @@
 
 **Project:** Scientific Research Assistant
 **Checkpoint:** November 10, 2026
-**Report status:** Preliminary, v0.1
-**Analysis snapshot:** November 2, 2026
+**Report status:** Preliminary, v0.2
+**Analysis snapshot:** November 3, 2026
 
 ## 1. Research Objective
 
@@ -279,6 +279,172 @@ All review labels currently have the status
 They must not be represented as independently validated
 human gold annotations.
 
+### 6.4. Combined QA Candidate Dataset
+
+A combined QA candidate dataset was assembled from three
+previously curated groups:
+
+| QA group | Recorded model | Candidates |
+|---|---|---:|
+| Research 08.5b | qwen3.5:9b | 19 |
+| Initial manual QA pilot | GPT-6 | 11 |
+| Additional Qwen pilot | qwen3:8b-q4_K_M | 2 |
+| Total | — | 32 |
+
+The GPT-6 records were prepared through a manually assisted
+ChatGPT workflow. They should not be interpreted as outputs
+of an automated generation experiment directly comparable
+to the local Ollama runs.
+
+The combined dataset contains 32 QA candidates associated
+with 27 distinct source paragraphs across seven papers.
+
+Multiple QA candidates may refer to the same source paragraph.
+Consequently, source_id is not required to be unique across
+QA records. The unique identifier is qa_id.
+
+#### 6.4.1. Distribution across publications
+
+| arXiv ID | QA candidates |
+|---|---:|
+| 1406.1078v3 | 5 |
+| 1409.0473v7 | 4 |
+| 1508.07909v5 | 5 |
+| 1512.00567v3 | 4 |
+| 1607.06450v1 | 5 |
+| 1610.02357v3 | 4 |
+| 1706.03762v7 | 5 |
+| Total | 32 |
+
+The number of QA candidates ranges from four to five per
+publication.
+
+The 27 distinct source paragraphs represent approximately
+5.6% of the 482 extracted paragraphs.
+
+This proportion describes the current selection coverage.
+It should not be interpreted as a measure of semantic
+coverage or QA dataset quality.
+
+#### 6.4.2. QA length statistics
+
+| Field | Minimum | Median | Maximum |
+|---|---:|---:|---:|
+| Question | 65 | 117.5 | 200 |
+| Answer | 30 | 124.5 | 272 |
+| Evidence quote | 81 | 214.5 | 479 |
+
+Lengths are measured in characters of the stored strings.
+
+Evidence quotes retain their original LaTeX representation.
+Their character lengths do not directly correspond to
+plain-text lengths or model token counts.
+
+#### 6.4.3. Review and curation history
+
+The initial manually assisted pilot contributed 11 accepted
+first-pass QA records. During the second review pass,
+seven were revised and four were retained unchanged.
+
+The additional Qwen3:8B pilot contributed two preliminarily
+accepted records. One was revised during the second pass,
+while the other remained unchanged.
+
+The 19 Research 08.5b candidates have the following
+curation origins:
+
+| Curation origin | Candidates |
+|---|---:|
+| Second-pass processing | 10 |
+| Revised from technically successful generation | 7 |
+| Reconstructed from technically failed generation | 2 |
+| Total | 19 |
+
+The revision_applied flag is true for 14 of the 19
+Research 08.5b candidates.
+
+However, this count includes different curation procedures,
+including reconstruction after technical generation failure.
+
+It must not be interpreted as the number of scientifically
+incorrect model answers or as a direct model error rate.
+
+All 19 Research 08.5b candidates received an accepted
+decision during the final checkpoint review.
+
+These decisions remain assistant_preliminary annotations.
+No independent expert adjudication has yet been performed.
+
+### 6.5. Dataset Integrity and Provenance
+
+The combined dataset was constructed using a deterministic
+assembly pipeline.
+
+The pipeline validates individual QA groups before merging
+them into a single collection.
+
+The final integrity results are summarized below.
+
+| Integrity check | Result |
+|---|---:|
+| Total QA candidates | 32 |
+| Unique QA IDs | 32 |
+| Distinct source IDs | 27 |
+| Publications | 7 |
+| Conflicting paper source hashes | 0 |
+| Conflicting metadata for reused source IDs | 0 |
+| Missing required QA fields | 0 |
+| Exact duplicate questions | 0 |
+| Unexpected dataset statuses | 0 |
+| JSONL readback verification | Passed |
+
+Exact duplicate questions were checked using paper IDs
+and question strings normalized for case and whitespace.
+
+This procedure does not detect semantic paraphrases or
+near-duplicate questions.
+
+Each combined QA record preserves the following information:
+
+- QA identifier and source paragraph identifier;
+- publication identifier and source archive SHA-256;
+- source document and section metadata;
+- question, answer, and exact evidence quote;
+- evidence coordinates within the raw LaTeX paragraph;
+- generation model and available generation provenance;
+- applicable review and revision metadata;
+- original dataset status and combined QA group.
+
+For the manually assisted pilot, source-file evidence
+coordinates were also checked against the corresponding
+source paragraph spans.
+
+For the 19 Research 08.5b candidates, the stored checkpoint
+review hashes were verified against the reviewed QA content.
+
+The combined dataset uses:
+
+`dataset_status = combined_candidate`
+
+All records retain:
+
+`verification_status = pending`
+
+These statuses distinguish successful dataset assembly
+from independent scientific validation.
+
+The versioned output is stored in:
+
+`research/data/qa_pilot/qa_combined_candidates_v1.jsonl`
+
+Its SHA-256 checksum is:
+
+`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+
+The checksum was verified against both the working-tree
+file and the Git index. JSONL line endings are explicitly
+configured as LF through .gitattributes.
+
 ## 7. QA Error Analysis
 
 The following error categories were observed:
@@ -343,67 +509,250 @@ is necessary but insufficient for scientific QA quality.
 The present study has several limitations.
 
 1. The corpus contains only seven scientific publications.
-   Results are not representative of arbitrary scholarly
-   documents.
+   The results are not representative of arbitrary scholarly
+   documents or scientific disciplines.
 
 2. Paragraphs are extracted as raw LaTeX structures.
-   Their lengths do not directly correspond to plain-text
-   token counts or retrieval chunk sizes.
+   Their character lengths do not directly correspond to
+   normalized plain-text lengths or model token counts.
 
-3. The QA experiments use small, deliberately selected
-   samples. They do not establish statistically reliable
-   model rankings.
+3. The local QA generation experiments use small,
+   deliberately selected samples. They do not support
+   statistically reliable comparisons or model rankings.
 
-4. Several paragraphs depend on neighboring equations,
-   tables, figures, or lists.
+4. Some extracted paragraphs depend on neighboring
+   equations, tables, figures, or lists. Exact evidence
+   alignment does not guarantee that a passage contains
+   sufficient context to answer a question independently.
 
-5. Review labels are preliminary and have not undergone
-   independent human adjudication.
+5. The combined QA dataset contains only 32 candidates
+   derived from 27 distinct source paragraphs.
+   Although the number of candidates is relatively balanced
+   across publications, coverage of scientific sections,
+   question types, and difficulty levels has not yet been
+   systematically evaluated.
 
-6. The current QA sets are not a complete retrieval benchmark.
-   Neither retrieval recall nor RAG answer quality has been
-   evaluated at this stage.
+6. Review decisions remain preliminary.
+   The current annotations were produced through
+   assistant-supported review procedures and have not
+   undergone independent expert adjudication.
 
-7. Some research data are stored in a Git-ignored directory.
-   A versioned experiment manifest and explicit artifact
-   preservation procedure are still required for complete
-   reproducibility.
+   Consequently, the combined dataset must not be treated
+   as a validated gold-standard QA benchmark.
+
+7. Exact duplicate detection uses normalized question
+   strings within each publication.
+   Semantic duplicates, paraphrases, and questions requiring
+   substantially overlapping evidence have not yet been
+   systematically reviewed.
+
+8. The dataset has not been divided into independent
+   development and evaluation subsets.
+
+   Multiple QA candidates may share a source paragraph.
+   Future dataset splitting must account for shared
+   source evidence to avoid evaluation leakage.
+
+9. Retrieval and RAG performance have not been evaluated.
+   The present study does not report retrieval recall,
+   ranking quality, answer faithfulness, or citation
+   attribution performance.
+
+10. Dataset assembly is deterministic given the preserved
+    input artifacts. However, this does not establish
+    end-to-end reproducibility of the original LLM
+    generations.
+
+    Original model outputs, generation configurations,
+    manually curated records, and downloaded arXiv sources
+    represent distinct provenance layers that require
+    appropriate preservation and documentation.
+
+These limitations define the scope of the current
+research checkpoint and the requirements for subsequent
+dataset development.
 
 ## 9. Next Steps
 
-Before the November 10 checkpoint:
+### 9.1. Before the November 10 checkpoint
 
-1. Extend the manually reviewed QA collection.
-2. Preserve original model outputs separately from
-   human-revised QA records.
-3. Increase coverage across papers and scientific sections.
-4. Add figures summarizing corpus characteristics and
-   QA quality.
-5. Finalize the experiment manifest and dataset documentation.
-6. Review and confirm preliminary scientific annotations.
+The immediate priority is to finalize and document
+the combined QA candidate dataset.
 
-Subsequent research will address:
+Planned activities include:
+
+1. Review the 32 QA candidates for scientific correctness,
+   evidence sufficiency, ambiguity, and preservation
+   of the original authors' claims.
+
+2. Identify potentially redundant questions and evaluate
+   whether individual questions are understandable
+   outside the context of their source paragraphs.
+
+3. Document the dataset composition, curation procedures,
+   provenance fields, and remaining quality limitations.
+
+4. Preserve the curated QA artifacts and their required
+   inputs under version control, while keeping downloaded
+   source archives and unrelated intermediate data outside
+   the repository.
+
+5. Complete the Research 08.5b exploratory analysis report
+   and verify its quantitative results against the
+   versioned dataset.
+
+6. Review the implementation and tests of the dataset
+   assembly pipeline, removing unnecessary duplication
+   where this can be done without changing its behavior.
+
+7. Discuss the current results and the next research
+   checkpoint with the project supervisor.
+
+The dataset will retain candidate status until its
+scientific annotations have been independently reviewed.
+
+### 9.2. Subsequent research
+
+The following stages will focus on:
 
 - retrieval-oriented text normalization and chunking;
-- BM25, dense, and hybrid retrieval baselines;
-- evidence attribution;
-- citation-aware retrieval;
-- grounded RAG generation;
-- agentic components where empirically justified.
+- construction of a scientifically reviewed QA
+  evaluation subset;
+- development of BM25, dense, and hybrid retrieval
+  baselines;
+- retrieval evaluation with explicit source evidence;
+- citation-aware retrieval across linked publications;
+- grounded answer generation and evidence attribution;
+- evaluation of answer faithfulness and citation quality;
+- agentic components where their contribution can
+  be empirically justified.
+
+Dataset splitting and evaluation design must account
+for shared evidence passages and publication identities
+to reduce the risk of information leakage.
 
 ## 10. Reproducibility
 
-The analysis is implemented in:
+### 10.1. Implementation
+
+Corpus and generation experiment analysis is implemented
+in:
 
 - `research/spikes/eda_qa_corpus.py`
 - `research/spikes/eda_qa_generation.py`
 
-Both modules accept explicit input files and produce
-deterministic JSON summaries.
+QA curation and dataset assembly use:
 
-Unit tests cover aggregation logic, boundary conditions,
-record uniqueness, provenance consistency, and review
-integrity.
+- `research/spikes/apply_qa_second_pass.py`
+- `research/spikes/assemble_qa_checkpoint.py`
+- `research/spikes/assemble_qa_dataset.py`
 
-At the current repository snapshot, the full test suite
-contains 267 passing tests.
+The assembly pipeline preserves the original candidate
+identifiers, source provenance, model metadata, and
+available review and revision history.
+
+The combined dataset is constructed from three
+independently prepared QA groups:
+
+- 19 Research 08.5b candidates;
+- 11 manually assisted pilot candidates;
+- 2 additional Qwen3:8B candidates.
+
+The final assembly performs cross-group consistency
+checks and applies a deterministic record ordering.
+
+### 10.2. Combined dataset
+
+The versioned output is:
+
+`research/data/qa_pilot/qa_combined_candidates_v1.jsonl`
+
+Dataset characteristics:
+
+| Property | Value |
+|---|---:|
+| QA candidates | 32 |
+| Unique QA IDs | 32 |
+| Distinct source paragraphs | 27 |
+| Publications | 7 |
+| Exact duplicate questions | 0 |
+| Dataset status | `combined_candidate` |
+| Verification status | `pending` |
+
+The output SHA-256 is:
+
+`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+
+The checksum was verified against both the working-tree
+file and the staged Git version.
+
+The relevant JSONL artifacts use LF line endings,
+enforced through the repository's `.gitattributes`.
+
+### 10.3. Reproducing the assembly
+
+The dataset can be rebuilt from the preserved
+source-paragraph exports, curated QA candidates,
+generation records, and review files.
+
+From the repository root, execute:
+
+```bash
+uv run --locked python -m research.spikes.assemble_qa_dataset \
+  --data-dir research/data/qa_pilot \
+  --output research/data/qa_pilot/qa_combined_candidates_v1_reproduced.jsonl
+```
+
+A separate output filename is required because the CLI
+uses exclusive file creation and does not overwrite
+existing datasets.
+
+The expected output contains:
+
+- 32 QA candidates;
+- 27 unique source IDs;
+- seven publications;
+- no exact duplicate questions;
+- a successful JSONL readback verification.
+
+The reproduced file can be checked with:
+
+```bash
+sha256sum research/data/qa_pilot/qa_combined_candidates_v1_reproduced.jsonl
+```
+
+For the same versioned inputs and assembly code,
+the expected SHA-256 is:
+
+`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+
+This procedure reproduces the combined dataset
+from its curated intermediate artifacts.
+
+It does not rerun the original LLM generation
+experiments or independently reproduce their outputs.
+
+### 10.4. Automated validation
+
+The project uses:
+
+- `ruff` for formatting and static linting;
+- `mypy` for static type checking;
+- `pytest` for automated testing.
+
+Tests cover source extraction, provenance consistency,
+QA evidence alignment, review integrity, candidate
+revision, content hashing, and dataset combination.
+
+The full test suite passed on November 3, 2026:
+
+```text
+326 passed in 1.50s
+```
+
+The validation environment used Python 3.12.14
+and the project's locked dependencies.
+
+Automated validation establishes technical and
+structural consistency. It does not replace
+independent scientific review of QA content.

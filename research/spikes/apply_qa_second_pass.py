@@ -63,26 +63,31 @@ def apply_second_pass(
     source_path: Path,
     input_path: Path,
     review_path: Path,
+    *,
+    allow_review_subset: bool = False,
 ) -> list[Record]:
     """Apply proposed revisions and preserve QA provenance."""
     sources = load_unique(source_path, "source_id")
     originals = load_unique(input_path, "qa_id")
     reviews = load_unique(review_path, "qa_id")
 
-    if originals.keys() != reviews.keys():
+    if allow_review_subset:
+        if not reviews:
+            raise ValueError("No review records provided")
+
+        unknown_ids = reviews.keys() - originals.keys()
+
+        if unknown_ids:
+            raise ValueError(f"Unknown reviewed QA IDs: {sorted(unknown_ids)}")
+
+    elif originals.keys() != reviews.keys():
         raise ValueError("QA IDs differ between input and review")
 
     results: list[Record] = []
-    seen_source_ids: set[str] = set()
 
-    for qa_id, original in originals.items():
-        review = reviews[qa_id]
+    for qa_id, review in reviews.items():
+        original = originals[qa_id]
         source_id = original["source_id"]
-
-        if source_id in seen_source_ids:
-            raise ValueError(f"Duplicate source ID: {source_id}")
-
-        seen_source_ids.add(source_id)
 
         if review.get("source_id") != source_id:
             raise ValueError(f"Source ID mismatch: {qa_id}")
@@ -211,6 +216,33 @@ def apply_second_pass(
             }
         )
 
+        if "evidence_source_span" in original:
+            spans = source.get("source_spans")
+
+            if not isinstance(spans, list) or len(spans) != 1:
+                raise ValueError(
+                    f"Cannot map evidence to a single source fragment: {qa_id}"
+                )
+
+            span = spans[0]
+
+            if (
+                not isinstance(span, dict)
+                or not isinstance(span.get("source_file"), str)
+                or not isinstance(span.get("start_offset"), int)
+                or not isinstance(span.get("end_offset"), int)
+                or span["end_offset"] - span["start_offset"] != len(raw_latex)
+            ):
+                raise ValueError(f"Invalid source span: {qa_id}")
+
+            source_start = span["start_offset"]
+
+            result["evidence_source_span"] = {
+                "source_file": span["source_file"],
+                "start_offset": source_start + start,
+                "end_offset": source_start + end,
+            }
+
         results.append(result)
 
     return results
@@ -235,6 +267,11 @@ def main() -> None:
         required=True,
     )
     parser.add_argument(
+        "--allow-review-subset",
+        action="store_true",
+        help="Allow reviews to cover only a subset of input QA records",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         required=True,
@@ -246,6 +283,7 @@ def main() -> None:
         args.source,
         args.input,
         args.review,
+        allow_review_subset=args.allow_review_subset,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

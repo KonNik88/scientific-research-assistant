@@ -1,0 +1,12 @@
+{"qa_id": "qa_pilot_0001", "status": "accepted", "question_type": "causal_explanation", "difficulty": "easy", "notes": "Correct causal explanation; evidence is sufficient."}
+{"qa_id": "qa_pilot_0002", "status": "accepted", "question_type": "fact_extraction", "difficulty": "easy", "notes": "Both conditions are supported by the evidence."}
+{"qa_id": "qa_pilot_0003", "status": "needs_revision", "question_type": "concept_interpretation", "difficulty": "medium", "notes": "Ambiguous interpretation of ds^2 as distance; rephrase the question."}
+{"qa_id": "qa_pilot_0004", "status": "accepted", "question_type": "fact_extraction", "difficulty": "easy", "notes": "Correct identification of the Fisher information matrix."}
+{"qa_id": "qa_pilot_0005", "status": "accepted", "question_type": "result_interpretation", "difficulty": "medium", "notes": "Correctly preserves the reported effect of sentence length."}
+{"qa_id": "qa_pilot_0006", "status": "accepted", "question_type": "fact_extraction", "difficulty": "easy", "notes": "Correct but straightforward extraction of an alignment type."}
+{"qa_id": "qa_pilot_0007", "status": "accepted", "question_type": "mechanism_explanation", "difficulty": "medium", "notes": "Supported mechanism; decoder is inferred from context."}
+{"qa_id": "qa_pilot_0008", "status": "accepted", "question_type": "training_objective", "difficulty": "medium", "notes": "Correct components and optimization objective."}
+{"qa_id": "qa_pilot_0009", "status": "accepted", "question_type": "fact_extraction", "difficulty": "easy", "notes": "Correct convolution sequence and receptive field."}
+{"qa_id": "qa_pilot_0010", "status": "accepted", "question_type": "computational_comparison", "difficulty": "medium", "notes": "Correct 33% saving and filter-count condition."}
+{"qa_id": "qa_pilot_0011", "status": "accepted", "question_type": "method_effect", "difficulty": "easy", "notes": "Supported benefit, but the question is straightforward."}
+{"qa_id": "qa_pilot_0012", "status": "accepted", "question_type": "training_techniques", "difficulty": "medium", "notes": "Correct combination of parameter reduction and regularization."}
