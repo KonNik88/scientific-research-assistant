@@ -19,6 +19,21 @@ from research.spikes.qa_schema import QACandidate
 Record = dict[str, Any]
 
 
+def qa_content_hash(record: Record) -> str:
+    """Hash the scientifically reviewed QA content and its source identity."""
+    fields = {
+        key: record[key]
+        for key in ("qa_id", "source_id", "question", "answer", "evidence_quote")
+    }
+    serialized = json.dumps(
+        fields,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(serialized.encode("utf-8")).hexdigest()
+
+
 def prepare_qwen_second_pass(
     source_path: Path,
     generation_path: Path,
@@ -391,25 +406,7 @@ def prepare_checkpoint_reviews(
             record["evidence_end_in_raw_latex"],
         )
 
-        hash_fields = {
-            key: record[key]
-            for key in (
-                "qa_id",
-                "source_id",
-                "question",
-                "answer",
-                "evidence_quote",
-            )
-        }
-
-        serialized = json.dumps(
-            hash_fields,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-
-        candidate_hash = sha256(serialized.encode("utf-8")).hexdigest()
+        candidate_hash = qa_content_hash(record)
 
         if review.get("candidate_sha256") != candidate_hash:
             raise ValueError(f"Checkpoint content hash mismatch: {qa_id}")
@@ -440,17 +437,119 @@ def prepare_checkpoint_reviews(
     return results
 
 
+def prepare_manual_topup(
+    source_paths: tuple[Path, Path],
+    candidate_path: Path,
+    review_path: Path,
+) -> list[Record]:
+    """Validate separately curated manual additions without altering older pilots."""
+    sources: dict[str, Record] = {}
+    for source_path in source_paths:
+        part = load_unique(source_path, "source_id")
+        if sources.keys() & part.keys():
+            raise ValueError("Overlapping source IDs in top-up source sets")
+        sources.update(part)
+
+    candidates = load_unique(candidate_path, "qa_id")
+    reviews = load_unique(review_path, "qa_id")
+    if candidates.keys() != reviews.keys():
+        raise ValueError("Manual top-up candidates and reviews differ")
+
+    results: list[Record] = []
+    for qa_id, record in candidates.items():
+        source_id = record["source_id"]
+        source = sources.get(source_id)
+        if source is None:
+            raise ValueError(f"Unknown manual top-up source: {qa_id}")
+
+        start = record["evidence_start_in_raw_latex"]
+        end = record["evidence_end_in_raw_latex"]
+        raw_latex = source["raw_latex"]
+        if (
+            not isinstance(start, int)
+            or not isinstance(end, int)
+            or not 0 <= start < end <= len(raw_latex)
+        ):
+            raise ValueError(f"Invalid manual top-up evidence range: {qa_id}")
+
+        evidence_quote = raw_latex[start:end]
+        candidate = QACandidate(
+            question=record["question"],
+            answer=record["answer"],
+            evidence_quote=evidence_quote,
+        )
+        check_evidence(raw_latex, candidate.evidence_quote, start, end)
+
+        spans = source["source_spans"]
+        if len(spans) != 1:
+            raise ValueError(f"Expected one source span for manual top-up: {qa_id}")
+        span = spans[0]
+        if span["end_offset"] - span["start_offset"] != len(raw_latex):
+            raise ValueError(f"Invalid manual top-up source span: {qa_id}")
+
+        result = {
+            "qa_id": qa_id,
+            "source_id": source_id,
+            "paper_id": source["paper_id"],
+            "source_sha256": source["source_sha256"],
+            "main_tex": source["main_tex"],
+            "section_index": source["section_index"],
+            "section_title_latex": source["section_title_latex"],
+            "assembled_start": source["assembled_start"],
+            "assembled_end": source["assembled_end"],
+            "source_spans": spans,
+            "question": candidate.question,
+            "answer": candidate.answer,
+            "evidence_quote": candidate.evidence_quote,
+            "evidence_start_in_raw_latex": start,
+            "evidence_end_in_raw_latex": end,
+            "evidence_source_span": {
+                "source_file": span["source_file"],
+                "start_offset": span["start_offset"] + start,
+                "end_offset": span["start_offset"] + end,
+            },
+            "model": record["model"],
+            "generation_method": record["generation_method"],
+            "generation_protocol": record["generation_protocol"],
+            "source_representation": "raw_latex",
+            "manual_topup_file": candidate_path.name,
+            "manual_topup_review_file": review_path.name,
+            "manual_topup_review_stage": "assistant_preliminary",
+            "verification_status": "pending",
+            "dataset_status": "manual_topup_candidate",
+        }
+
+        review = reviews[qa_id]
+        if (
+            review.get("source_id") != source_id
+            or review.get("status") != "accepted"
+            or review.get("issue_codes") != []
+            or review.get("review_stage") != "assistant_preliminary"
+            or review.get("review_method") != "manual_chat_review"
+            or review.get("candidate_sha256") != qa_content_hash(result)
+        ):
+            raise ValueError(f"Invalid manual top-up review: {qa_id}")
+
+        result["manual_topup_candidate_sha256"] = review["candidate_sha256"]
+        results.append(result)
+
+    return results
+
+
 def combine_qa_candidates(
     checkpoint: list[Record],
     pilot: list[Record],
     qwen: list[Record],
+    manual_topup: list[Record] | None = None,
 ) -> list[Record]:
     """Combine validated QA groups without losing their provenance."""
-    groups = (
+    groups = [
         ("research08_5b", "checkpoint_candidate", checkpoint),
         ("pilot_chatgpt", "second_pass_candidate", pilot),
         ("pilot_qwen3_8b", "second_pass_candidate", qwen),
-    )
+    ]
+    if manual_topup is not None:
+        groups.append(("manual_topup", "manual_topup_candidate", manual_topup))
 
     required_fields = {
         "qa_id",
@@ -605,6 +704,11 @@ def main() -> None:
         required=True,
         help="Output JSONL path (must not already exist)",
     )
+    parser.add_argument(
+        "--include-manual-topup",
+        action="store_true",
+        help="Include the three separately reviewed manual QA additions (dataset v2)",
+    )
 
     args = parser.parse_args()
     data_dir: Path = args.data_dir
@@ -629,10 +733,24 @@ def main() -> None:
         data_dir / "manual_review_qa_new_second_pass_v1.jsonl",
     )
 
+    manual_topup = (
+        prepare_manual_topup(
+            (
+                data_dir / "source_paragraphs.jsonl",
+                data_dir / "source_paragraphs_research08_5b.jsonl",
+            ),
+            data_dir / "qa_manual_topup_v1.jsonl",
+            data_dir / "manual_review_qa_topup_v1.jsonl",
+        )
+        if args.include_manual_topup
+        else None
+    )
+
     combined = combine_qa_candidates(
         checkpoint,
         pilot,
         qwen,
+        manual_topup,
     )
 
     group_counts = Counter(record["qa_group"] for record in combined)
@@ -642,6 +760,8 @@ def main() -> None:
         "pilot_chatgpt": 11,
         "pilot_qwen3_8b": 2,
     }
+    if args.include_manual_topup:
+        expected_counts["manual_topup"] = 3
 
     if group_counts != expected_counts:
         raise ValueError(f"Unexpected QA composition: {dict(group_counts)}")

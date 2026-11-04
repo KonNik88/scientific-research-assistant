@@ -4,7 +4,7 @@
 
 A master's annual research project exploring how to search and answer questions across a scientific paper **and the publications it cites**, while preserving verifiable evidence and its original source.
 
-> **Project status — October 2026:** The arXiv acquisition and citation-neighborhood pilot is complete, and a provenance-preserving **LaTeX parsing research prototype** is under active development. Retrieval benchmarks, the QA dataset, RAG, and the application layer are planned; they are **not yet implemented**.
+> **Project status — November 2026:** The arXiv acquisition and citation-neighborhood pilot and a provenance-preserving LaTeX extraction prototype are available. **Research 08.5b** includes exploratory analysis of **482 source paragraphs from 7 papers** and a versioned **35-candidate question–answer–evidence pilot dataset**. The QA reviews are assistant-preliminary, not independent gold labels. Retrieval benchmarks, RAG, and the application layer are not yet implemented.
 
 ## Overview
 
@@ -72,7 +72,7 @@ flowchart TD
     P -.-> R
 ```
 
-The diagram describes the **target architecture**, not a fully delivered application. The presently implemented research focuses on ingestion, reference handling, and structured TeX extraction.
+The diagram describes the **target architecture**, not a fully delivered application. The presently implemented research covers ingestion, reference handling, structured TeX extraction, and pilot QA generation/curation.
 
 ## Research Approach
 
@@ -95,6 +95,12 @@ Unresolved references and unavailable artifacts remain visible in acquisition ma
 For every paper with sufficiently usable content, the planned dataset-generation step targets **at least five meaningful questions**, each accompanied by an answer and precise supporting evidence.
 
 The dataset must retain paper identity, source location, generation metadata, and validation status. Automatic format checks and manual review of a sample are required before freezing an evaluation set. LLM-generated questions are **not automatically gold-standard labels**.
+
+The current exploratory pilot meets the five-per-paper target across seven
+publications. Its 35 QA candidates refer to 30 distinct extracted paragraphs.
+Evidence coordinates, generation provenance, preliminary review decisions,
+and versioned inputs are retained. This small pilot is **not** a frozen
+retrieval benchmark. See [Research 08.5b EDA](research/reports/research08_5b_eda.md).
 
 ### 4. Retrieval experiments
 
@@ -191,7 +197,11 @@ An earlier section-level diagnostic returned **346 successful sections out of 39
 
 A source-defined macro case in the Layer Normalization paper was resolved by verifying the definition in `macros.tex` and preserving **19 occurrences of `\bea … \eea`** as complete, traceable math blocks. This is an **explicit opt-in mapping**, not general LaTeX macro expansion.
 
-The latest reported local verification after list support comprised **148 passing offline tests**, with Ruff and strict mypy checks passing after import/type-annotation fixes. This is a development snapshot, not an automatically updated test badge or a claim about the current Git HEAD.
+The November 3 development snapshot comprised **326 passing tests** with Ruff,
+strict mypy, and pre-commit checks passing. On November 4, 2026, the full test suite passed with
+329 tests in 3.26 seconds. Ruff formatting and linting
+checks, as well as mypy checks for the modified source
+and test files, also passed.
 
 ### Known limitations
 
@@ -200,7 +210,9 @@ The latest reported local verification after list support comprised **148 passin
 - Captions, table cells, figure assets, individual list items, and section-label links are not yet separate semantic objects.
 - The current pipeline preserves TeX syntax; it does not yet produce normalized text and stable retrieval chunks across the entire corpus.
 - The PDF-wrapper case still needs a fallback pathway.
-- No BM25/dense evaluation, QA dataset, RAG answering, or user-facing application is delivered yet.
+- The current QA dataset is a small, assistant-reviewed **candidate pilot**;
+  there is no independently adjudicated gold benchmark or evaluated train/test split.
+- No BM25/dense evaluation, RAG answering, or user-facing application is delivered yet.
 
 Unsupported constructs should produce an explicit diagnostic rather than disappearing silently.
 
@@ -225,7 +237,8 @@ scientific-research-assistant/
 ├── docs/                   # plans and research decisions, as added
 ├── research/
 │   ├── spikes/             # experimental acquisition/parsing modules
-│   └── data/arxiv/         # local, Git-ignored source corpus
+│   ├── reports/            # exploratory analysis and research reports
+│   └── data/               # mostly Git-ignored; selected QA JSONL are versioned
 ├── src/                    # reserved for stabilized application modules
 ├── tests/                  # offline regression tests
 ├── pyproject.toml
@@ -260,6 +273,20 @@ uv run python -m research.spikes.assemble_tex_document \
 
 The repository does **not** require compiling untrusted TeX to run its parsing experiments. Network-dependent collection is kept separate from offline regression tests.
 
+To reproduce the current 35-record QA pilot from its preserved inputs:
+
+```bash
+uv run --locked python -m research.spikes.assemble_qa_dataset \
+  --include-manual-topup \
+  --data-dir research/data/qa_pilot \
+  --output research/data/qa_pilot/qa_combined_candidates_v2_reproduced.jsonl
+```
+
+The output path must not exist beforehand. Without
+`--include-manual-topup`, the original 32-record v1 dataset remains
+reproducible. Rebuilding assembled QA does not reproduce the stochastic
+original LLM generations.
+
 ### Research principles
 
 1. **Preserve provenance.** Retain original artifacts, document versions, source offsets, and reversible source mappings.
@@ -282,7 +309,7 @@ These are **internal technical milestones**, not a claim about the university's 
 | Structured document extraction | TeX assembly, headings, paragraphs, math, figures, tables, lists and provenance | **Research in progress** |
 | Coverage and PDF fallback | Whole-document accounting, unsupported syntax, PDF-based extraction path | **Next** |
 | Unified corpus and chunks | Stable document/block/chunk IDs and reproducible indexing input | Planned |
-| QA/evidence dataset | ≥5 questions per usable paper, automated checks, manual review, frozen split | Planned |
+| QA/evidence dataset | ≥5 questions per usable paper, automated checks, manual review, frozen split | **35-candidate pilot; independent review/split pending** |
 | BM25 baseline | First passage/document retrieval benchmark | Planned |
 | Dense and hybrid retrieval | Bi-encoder, embeddings, fusion and comparative evaluation | Planned |
 | Cross-encoder reranking | Reranked retrieval and latency/quality ablations | Planned |
@@ -291,16 +318,18 @@ These are **internal technical milestones**, not a claim about the university's 
 
 ### Next research task
 
-**Research 06c.5 — repeat the full-corpus diagnostic** after adding `paragraph` headings, source-defined paired math macros, and list blocks:
+**Research 08.5b — finalize exploratory corpus and QA analysis for the November 10 checkpoint:**
 
-1. verify the working branch, commits, and test suite;
-2. rerun extraction across the **21 TeX-capable papers**;
-3. count successfully processed sections and classify remaining failure causes;
-4. investigate `eqnarray`, formatting wrappers, and unsupported environments;
-5. build a source-coverage audit that accounts for text **before the first heading**, gaps between blocks, and material after the last heading;
-6. distinguish structural coverage from **scientific content fidelity** before progressing to normalized text and chunking.
+1. verify the 35-candidate dataset, its evidence alignment, review provenance,
+   checksum, and reproducibility;
+2. finalize the EDA of 482 source paragraphs, QA-generation experiments,
+   error examples, and limitations;
+3. run the full locked test suite and static checks;
+4. inspect the code and prepare a concise research summary for the supervisor.
 
-The priority is to measure and reduce **information loss**, not merely to add more recognized environment names.
+The earlier full-corpus extraction coverage diagnostic remains a future
+research task. Current priorities are **transparent evidence quality and
+reproducibility**, not adding unrelated infrastructure before the checkpoint.
 
 ---
 

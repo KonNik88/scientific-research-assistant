@@ -2,8 +2,8 @@
 
 **Project:** Scientific Research Assistant
 **Checkpoint:** November 10, 2026
-**Report status:** Preliminary, v0.2
-**Analysis snapshot:** November 3, 2026
+**Report status:** Preliminary, v0.3
+**Analysis snapshot:** November 4, 2026
 
 ## 1. Research Objective
 
@@ -217,6 +217,17 @@ source paragraphs.
 Qwen3.5 9B was subsequently evaluated on 12 additional,
 non-overlapping paragraphs.
 
+The initial evaluation set contained two source paragraphs
+from each of the four Research 08.5b publications.
+The extended set contained three additional paragraphs
+per publication, including passages from experimental
+and results sections.
+
+These small, balanced sets were used for exploratory
+analysis of generation behavior and error types.
+They should not be considered random or representative
+samples of scientific text.
+
 The experiments used:
 
 - QA generation prompt v2;
@@ -282,22 +293,23 @@ human gold annotations.
 ### 6.4. Combined QA Candidate Dataset
 
 A combined QA candidate dataset was assembled from three
-previously curated groups:
+previously curated groups and a separately reviewed manual top-up:
 
 | QA group | Recorded model | Candidates |
 |---|---|---:|
 | Research 08.5b | qwen3.5:9b | 19 |
 | Initial manual QA pilot | GPT-6 | 11 |
 | Additional Qwen pilot | qwen3:8b-q4_K_M | 2 |
-| Total | — | 32 |
+| Manual top-up (November 4) | GPT-6 | 3 |
+| Total | — | 35 |
 
 The GPT-6 records were prepared through a manually assisted
 ChatGPT workflow. They should not be interpreted as outputs
 of an automated generation experiment directly comparable
 to the local Ollama runs.
 
-The combined dataset contains 32 QA candidates associated
-with 27 distinct source paragraphs across seven papers.
+The combined dataset contains 35 QA candidates associated
+with 30 distinct source paragraphs across seven papers.
 
 Multiple QA candidates may refer to the same source paragraph.
 Consequently, source_id is not required to be unique across
@@ -308,31 +320,33 @@ QA records. The unique identifier is qa_id.
 | arXiv ID | QA candidates |
 |---|---:|
 | 1406.1078v3 | 5 |
-| 1409.0473v7 | 4 |
+| 1409.0473v7 | 5 |
 | 1508.07909v5 | 5 |
-| 1512.00567v3 | 4 |
+| 1512.00567v3 | 5 |
 | 1607.06450v1 | 5 |
-| 1610.02357v3 | 4 |
+| 1610.02357v3 | 5 |
 | 1706.03762v7 | 5 |
-| Total | 32 |
+| Total | 35 |
 
-The number of QA candidates ranges from four to five per
-publication.
+Each publication contributes five QA candidates.
 
-The 27 distinct source paragraphs represent approximately
-5.6% of the 482 extracted paragraphs.
+The 30 distinct source paragraphs represent approximately
+6.2% of the 482 extracted paragraphs.
 
-This proportion describes the current selection coverage.
-It should not be interpreted as a measure of semantic
-coverage or QA dataset quality.
+The selected QA evidence spans 25 of the 136 document
+sections containing extracted paragraphs (18.4%).
+
+These ratios describe selection coverage of extracted structures.
+Neither paragraph nor section coverage should be interpreted
+as a measure of semantic coverage or QA dataset quality.
 
 #### 6.4.2. QA length statistics
 
 | Field | Minimum | Median | Maximum |
 |---|---:|---:|---:|
-| Question | 65 | 117.5 | 200 |
-| Answer | 30 | 124.5 | 272 |
-| Evidence quote | 81 | 214.5 | 479 |
+| Question | 65 | 122 | 202 |
+| Answer | 30 | 126 | 272 |
+| Evidence quote | 81 | 221 | 479 |
 
 Lengths are measured in characters of the stored strings.
 
@@ -375,6 +389,25 @@ decision during the final checkpoint review.
 These decisions remain assistant_preliminary annotations.
 No independent expert adjudication has yet been performed.
 
+The final set of 19 Research 08.5b candidates represents
+the result of assistant-assisted curation, not the
+generation accuracy of Qwen3.5 9B.
+
+Of the original 20 Qwen3.5 generations, 10 were accepted
+unchanged, seven technically successful candidates were
+revised, two were reconstructed after technical failures,
+and one was rejected. Thus, the 19 curated records do not
+imply a 95% first-pass model success rate.
+
+The November 4 manual top-up contributed three further QA
+records, one each for neural machine translation (bidirectional
+encoder annotations), Inception (label-smoothing loss), and
+Xception (intermediate activation ablation). All three use
+previously unused source paragraphs. Their candidate and review
+records are preserved separately, and the review status remains
+`assistant_preliminary`. This was an assistant-assisted manual
+curation step, not an additional Ollama generation experiment.
+
 ### 6.5. Dataset Integrity and Provenance
 
 The combined dataset was constructed using a deterministic
@@ -387,9 +420,9 @@ The final integrity results are summarized below.
 
 | Integrity check | Result |
 |---|---:|
-| Total QA candidates | 32 |
-| Unique QA IDs | 32 |
-| Distinct source IDs | 27 |
+| Total QA candidates | 35 |
+| Unique QA IDs | 35 |
+| Distinct source IDs | 30 |
 | Publications | 7 |
 | Conflicting paper source hashes | 0 |
 | Conflicting metadata for reused source IDs | 0 |
@@ -435,19 +468,39 @@ from independent scientific validation.
 
 The versioned output is stored in:
 
-`research/data/qa_pilot/qa_combined_candidates_v1.jsonl`
+`research/data/qa_pilot/qa_combined_candidates_v2.jsonl`
 
 Its SHA-256 checksum is:
 
-`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+`a380a375bb040ba60a42a89bf6863535a93fada7c600bb9c2038fa138dc800a4`
 
-The checksum was verified against both the working-tree
-file and the Git index. JSONL line endings are explicitly
-configured as LF through .gitattributes.
+This checksum was reproduced in the author's local development
+environment as well as in the handoff-based working copy.
+The earlier v1 dataset and its verified checksum are preserved
+unchanged. JSONL line endings are explicitly configured as LF
+through `.gitattributes`.
 
 ## 7. QA Error Analysis
 
 The following error categories were observed:
+
+Across the 20 Qwen3.5 9B generations, the preliminary
+review records contain these issue-code frequencies:
+
+| Issue code | Occurrences |
+|---|---:|
+| `evidence_insufficient` | 3 |
+| `question_context_dependent` | 3 |
+| `latex_corrupted` | 2 |
+| `non_verbatim_evidence` | 2 |
+| `unsupported_claim` | 2 |
+| `uncertainty_omitted` | 1 |
+
+One generation may have more than one issue code, so the
+counts must not be summed as if they represented distinct
+failed generations. The frequencies are descriptive only;
+the small, selected sample does not support general error-rate
+estimates for Qwen3.5 9B.
 
 ### 7.1. LaTeX corruption
 
@@ -525,12 +578,11 @@ The present study has several limitations.
    alignment does not guarantee that a passage contains
    sufficient context to answer a question independently.
 
-5. The combined QA dataset contains only 32 candidates
-   derived from 27 distinct source paragraphs.
-   Although the number of candidates is relatively balanced
-   across publications, coverage of scientific sections,
-   question types, and difficulty levels has not yet been
-   systematically evaluated.
+5. The combined QA dataset contains only 35 candidates
+   derived from 30 distinct source paragraphs.
+   Although five candidates are included for each publication,
+   semantic coverage, question types, and difficulty levels
+   have not yet been systematically evaluated.
 
 6. Review decisions remain preliminary.
    The current annotations were produced through
@@ -581,7 +633,8 @@ the combined QA candidate dataset.
 
 Planned activities include:
 
-1. Review the 32 QA candidates for scientific correctness,
+1. Document the completed assistant-preliminary review of
+   35 QA candidates, including scientific correctness,
    evidence sufficiency, ambiguity, and preservation
    of the original authors' claims.
 
@@ -651,12 +704,18 @@ The assembly pipeline preserves the original candidate
 identifiers, source provenance, model metadata, and
 available review and revision history.
 
-The combined dataset is constructed from three
-independently prepared QA groups:
+The combined dataset is constructed from four
+separately prepared QA groups:
 
 - 19 Research 08.5b candidates;
 - 11 manually assisted pilot candidates;
-- 2 additional Qwen3:8B candidates.
+- 2 additional Qwen3:8B candidates;
+- 3 additional manually curated candidates (November 4).
+
+The three manual additions are recorded in
+`qa_manual_topup_v1.jsonl` and `manual_review_qa_topup_v1.jsonl`.
+The assembly validates their evidence coordinates and review
+content hashes against the versioned source paragraphs.
 
 The final assembly performs cross-group consistency
 checks and applies a deterministic record ordering.
@@ -665,15 +724,15 @@ checks and applies a deterministic record ordering.
 
 The versioned output is:
 
-`research/data/qa_pilot/qa_combined_candidates_v1.jsonl`
+`research/data/qa_pilot/qa_combined_candidates_v2.jsonl`
 
 Dataset characteristics:
 
 | Property | Value |
 |---|---:|
-| QA candidates | 32 |
-| Unique QA IDs | 32 |
-| Distinct source paragraphs | 27 |
+| QA candidates | 35 |
+| Unique QA IDs | 35 |
+| Distinct source paragraphs | 30 |
 | Publications | 7 |
 | Exact duplicate questions | 0 |
 | Dataset status | `combined_candidate` |
@@ -681,10 +740,15 @@ Dataset characteristics:
 
 The output SHA-256 is:
 
-`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+`a380a375bb040ba60a42a89bf6863535a93fada7c600bb9c2038fa138dc800a4`
 
-The checksum was verified against both the working-tree
-file and the staged Git version.
+The original 32-candidate `qa_combined_candidates_v1.jsonl`
+remains unchanged, with SHA-256
+`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`.
+
+The checksum of v2 was independently reproduced from
+the preserved inputs and compared with the working-tree
+file in the author's development environment.
 
 The relevant JSONL artifacts use LF line endings,
 enforced through the repository's `.gitattributes`.
@@ -699,8 +763,9 @@ From the repository root, execute:
 
 ```bash
 uv run --locked python -m research.spikes.assemble_qa_dataset \
+  --include-manual-topup \
   --data-dir research/data/qa_pilot \
-  --output research/data/qa_pilot/qa_combined_candidates_v1_reproduced.jsonl
+  --output research/data/qa_pilot/qa_combined_candidates_v2_reproduced.jsonl
 ```
 
 A separate output filename is required because the CLI
@@ -709,8 +774,8 @@ existing datasets.
 
 The expected output contains:
 
-- 32 QA candidates;
-- 27 unique source IDs;
+- 35 QA candidates;
+- 30 unique source IDs;
 - seven publications;
 - no exact duplicate questions;
 - a successful JSONL readback verification.
@@ -718,13 +783,16 @@ The expected output contains:
 The reproduced file can be checked with:
 
 ```bash
-sha256sum research/data/qa_pilot/qa_combined_candidates_v1_reproduced.jsonl
+sha256sum research/data/qa_pilot/qa_combined_candidates_v2_reproduced.jsonl
 ```
 
 For the same versioned inputs and assembly code,
 the expected SHA-256 is:
 
-`e942be16fdaef71bdd2320b776de937503e7172df822b25e0c93d645067bca16`
+`a380a375bb040ba60a42a89bf6863535a93fada7c600bb9c2038fa138dc800a4`
+
+Omitting `--include-manual-topup` continues to reproduce
+the unchanged 32-record v1 dataset with its original checksum.
 
 This procedure reproduces the combined dataset
 from its curated intermediate artifacts.
@@ -744,11 +812,14 @@ Tests cover source extraction, provenance consistency,
 QA evidence alignment, review integrity, candidate
 revision, content hashing, and dataset combination.
 
-The full test suite passed on November 3, 2026:
+The full test suite passed on November 4, 2026:
 
 ```text
-326 passed in 1.50s
+329 passed in 3.26s
 ```
+
+Ruff formatting and linting checks passed.
+Mypy checks passed for the modified source and test files.
 
 The validation environment used Python 3.12.14
 and the project's locked dependencies.

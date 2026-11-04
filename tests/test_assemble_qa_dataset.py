@@ -11,8 +11,10 @@ import pytest
 from research.spikes.assemble_qa_dataset import (
     combine_qa_candidates,
     prepare_checkpoint_reviews,
+    prepare_manual_topup,
     prepare_pilot_second_pass,
     prepare_qwen_second_pass,
+    qa_content_hash,
 )
 
 
@@ -766,3 +768,92 @@ def test_combining_qa_rejects_unexpected_verification_status() -> None:
 
     with pytest.raises(ValueError, match="Unexpected QA status"):
         combine_qa_candidates(checkpoint, pilot, qwen)
+
+
+def make_manual_topup_files(tmp_path: Path) -> tuple[tuple[Path, Path], Path, Path]:
+    source_paths = (tmp_path / "sources_a.jsonl", tmp_path / "sources_b.jsonl")
+    candidate_path = tmp_path / "manual_topup.jsonl"
+    review_path = tmp_path / "topup_review.jsonl"
+
+    source: dict[str, Any] = {
+        "source_id": "paper:paragraph:10-46",
+        "paper_id": "paper",
+        "source_sha256": "a" * 64,
+        "main_tex": "paper.tex",
+        "section_index": 1,
+        "section_title_latex": "Experiments",
+        "assembled_start": 10,
+        "assembled_end": 46,
+        "source_spans": [
+            {"source_file": "paper.tex", "start_offset": 100, "end_offset": 136}
+        ],
+        "raw_latex": "The proposed architecture is faster.",
+    }
+    write_jsonl(source_paths[0], [source])
+    write_jsonl(source_paths[1], [])
+
+    candidate = {
+        "qa_id": "qa_manual_topup_0001",
+        "source_id": source["source_id"],
+        "question": "What was observed about the proposed architecture?",
+        "answer": "It is faster.",
+        "evidence_start_in_raw_latex": 0,
+        "evidence_end_in_raw_latex": len(source["raw_latex"]),
+        "model": "GPT-6",
+        "generation_method": "chatgpt_conversation_manual_topup",
+        "generation_protocol": "manual_qa_topup_v1",
+    }
+    write_jsonl(candidate_path, [candidate])
+
+    review = {
+        "qa_id": candidate["qa_id"],
+        "source_id": source["source_id"],
+        "status": "accepted",
+        "issue_codes": [],
+        "review_stage": "assistant_preliminary",
+        "review_method": "manual_chat_review",
+        "candidate_sha256": qa_content_hash(
+            {**candidate, "evidence_quote": source["raw_latex"]}
+        ),
+    }
+    write_jsonl(review_path, [review])
+    return source_paths, candidate_path, review_path
+
+
+def test_manual_topup_preserves_source_coordinates_and_review(tmp_path: Path) -> None:
+    records = prepare_manual_topup(*make_manual_topup_files(tmp_path))
+    assert len(records) == 1
+    record = records[0]
+    assert record["evidence_source_span"] == {
+        "source_file": "paper.tex",
+        "start_offset": 100,
+        "end_offset": 136,
+    }
+    assert record["dataset_status"] == "manual_topup_candidate"
+    assert record["verification_status"] == "pending"
+    assert record["manual_topup_review_stage"] == "assistant_preliminary"
+
+
+def test_manual_topup_rejects_modified_qa_after_review(tmp_path: Path) -> None:
+    source_paths, candidate_path, review_path = make_manual_topup_files(tmp_path)
+    candidates = read_jsonl(candidate_path)
+    candidates[0]["answer"] = "A changed, unreviewed answer."
+    write_jsonl(candidate_path, candidates)
+
+    with pytest.raises(ValueError, match="Invalid manual top-up review"):
+        prepare_manual_topup(source_paths, candidate_path, review_path)
+
+
+def test_combined_dataset_accepts_separate_manual_topup_group() -> None:
+    checkpoint, pilot, qwen = make_combined_groups()
+    topup = [
+        make_combined_record(
+            "qa_manual_topup_1",
+            "paper:paragraph:60-68",
+            start=60,
+            dataset_status="manual_topup_candidate",
+        )
+    ]
+    combined = combine_qa_candidates(checkpoint, pilot, qwen, topup)
+    assert len(combined) == 5
+    assert sum(row["qa_group"] == "manual_topup" for row in combined) == 1
